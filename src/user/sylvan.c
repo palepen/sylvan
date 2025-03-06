@@ -4,22 +4,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
 #include <unistd.h>
 
+#include <sylvan/cmd.h>
 
-struct cmd_args {
-    const char *file_args;
-    const char *filepath;
-    bool attach_mode;
-    pid_t pid;
-};
 
 void cmd_args_init(struct cmd_args *args) {
     struct cmd_args tmp = {
         .file_args = NULL,
         .filepath = NULL,
-        .attach_mode = false,
+        .is_attached = false,
         .pid = 0,
     };
     *args = tmp;
@@ -74,7 +68,7 @@ void parse_args(int argc, char *argv[], struct cmd_args *cmd_args) {
                     fprintf(stderr, "Invalid process id: %s\n", optarg);
                     exit(EXIT_FAILURE);
                 }
-                cmd_args->attach_mode = true;
+                cmd_args->is_attached = true;
                 cmd_args->pid = pid;
                 break;
             }

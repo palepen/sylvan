@@ -1,11 +1,12 @@
 TARGET      ?= sylvan
 SRC         := src
 
+ARGS        ?=
 C_SRC       := $(shell find $(SRC) -type f -name "*.c")
 INCLUDE     := $(SRC)/include
 C_INCLUDE   := $(patsubst %, -I%, $(INCLUDE))
 
-CC_FLAGS    := -MMD -MP $(C_INCLUDE)
+CC_FLAGS    := -Wall -Wextra -MMD -MP $(C_INCLUDE)
 LD_FLAGS    :=
 
 OBJS := $(patsubst $(SRC)/%.c, build/%.c.o, $(C_SRC))
@@ -23,7 +24,7 @@ build/$(TARGET): $(OBJS) Makefile
 	$(CC) $(LD_FLAGS) $(OBJS) -o build/$(TARGET)
 
 run: build/$(TARGET)
-	build/$(TARGET)
+	build/$(TARGET) $(ARGS)
 
 clean:
 	-rm -rf build/

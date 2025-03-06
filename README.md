@@ -6,8 +6,8 @@ An x86-64 debugger
 
 ### Prerequisites
 
-- Linux System
-- C compiler
+- Linux System (not sure if any linux specific things are used that posix compliant)
+- GCC compiler (GNU extensions are used)
 - make
 
 ### Setup and Execution
@@ -27,3 +27,11 @@ or
 #### Clean
 
 ```make clean```
+
+## TODO
+
+- ~~attach to a process~~
+- run a process
+- software breakpoints
+- hardware breakpoints
+- watch points
