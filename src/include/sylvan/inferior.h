@@ -2,7 +2,7 @@
 #define INFERIOR_H
 
 #include <stdbool.h>
-
+#include <sys/types.h>
 
 enum inferior_state {
     INFERIOR_NONE,

@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sylvan/inferior.h>
 #include <sylvan/cmd.h>
+#include <sylvan/user_interface.h>
 
 
 void cmd_args_init(struct cmd_args *args) {
@@ -133,7 +134,8 @@ int main(int argc, char *argv[]) {
     }
 
     printf("continuing the process\n");
-
+    
+    interface_loop(inf);
     if (inferior_continue(inf))
         error("could not continue the process\n");
 
