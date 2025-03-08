@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <sylvan/inferior.h>
 #include <sylvan/cmd.h>
 
 
@@ -96,12 +96,48 @@ void parse_args(int argc, char *argv[], struct cmd_args *cmd_args) {
 
 }
 
+void error(const char *msg) {
+    fprintf(stderr, msg);
+    fprintf(stderr, "\n");
+    exit(EXIT_FAILURE);
+}
+
 int main(int argc, char *argv[]) {
 
     struct cmd_args cmd_args;
     cmd_args_init(&cmd_args);
 
     parse_args(argc, argv, &cmd_args);
+
+    // temporary code
+
+    struct inferior *inf = inferior_create();
+
+    if (inferior_set_args(inf, cmd_args.file_args))
+        error("could not set args");
+
+    if (cmd_args.filepath) {
+        if (inferior_set_filepath(inf, cmd_args.filepath))
+            error("could not set filepath");
+    }
+
+    if (inf == NULL)
+        error("could not create inferior");
+
+    if (cmd_args.is_attached) {
+        if (inferior_attach_pid(inf, cmd_args.pid))
+            error("could not attach to process");
+    } else if (inf->realpath) {
+        if (inferior_run(inf))
+            error("could not run inferior");
+    }
+
+    printf("continuing the process\n");
+
+    if (inferior_continue(inf))
+        error("could not continue the process\n");
+
+    inferior_destroy(inf);
 
     return EXIT_SUCCESS;
 
