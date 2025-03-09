@@ -6,8 +6,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sylvan/inferior.h>
-#include <sylvan/cmd.h>
-#include <sylvan/user_interface.h>
+#include "cmd.h"
+#include "user_interface.h"
 
 
 void cmd_args_init(struct cmd_args *args) {
@@ -24,7 +24,7 @@ void print_help() {
     printf("Usage: sylvan [options]\n");
     printf("  -h, --help                Show this help message\n");
     printf("  -v, --version             Show version information\n");
-    printf("  -a, --args   <args>       Pass <args> as arguments to the inferior\n");
+    printf("  -a, --args   <args>       Pass <args> as arguments to the sylvan_inferior\n");
     printf("  -p, --attach <pid>        Attach to a process with process id <pid>\n");
 }
 
@@ -112,34 +112,36 @@ int main(int argc, char *argv[]) {
 
     // temporary code
 
-    struct inferior *inf = inferior_create();
+    struct sylvan_inferior *inf;
+    if (sylvan_inferior_create(&inf))
+        error(sylvan_get_last_error());
 
-    if (inferior_set_args(inf, cmd_args.file_args))
-        error("could not set args");
+    if (sylvan_set_args(inf, cmd_args.file_args))
+        error(sylvan_get_last_error());
 
     if (cmd_args.filepath) {
-        if (inferior_set_filepath(inf, cmd_args.filepath))
-            error("could not set filepath");
+        if (sylvan_set_filepath(inf, cmd_args.filepath))
+            error(sylvan_get_last_error());
     }
-
-    if (inf == NULL)
-        error("could not create inferior");
 
     if (cmd_args.is_attached) {
-        if (inferior_attach_pid(inf, cmd_args.pid))
-            error("could not attach to process");
-    } else if (inf->realpath) {
-        if (inferior_run(inf))
-            error("could not run inferior");
+        if (sylvan_attach_pid(inf, cmd_args.pid))
+            error(sylvan_get_last_error());
+    } else if (cmd_args.filepath) {
+        if (sylvan_run(inf))
+            error(sylvan_get_last_error());
     }
 
+    int time = 10000000;
+
+    printf("waiting for %dms \n", time / 1000);
+    usleep(10000000);
     printf("continuing the process\n");
     
-    interface_loop(inf);
-    if (inferior_continue(inf))
-        error("could not continue the process\n");
+    if (sylvan_continue(inf))
+        error(sylvan_get_last_error());
 
-    inferior_destroy(inf);
+    sylvan_inferior_destroy(inf);
 
     return EXIT_SUCCESS;
 

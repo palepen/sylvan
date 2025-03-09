@@ -6,8 +6,8 @@
 #include <limits.h>
 #include <string.h>
 
-#include <sylvan/user_interface.h>
-#include <sylvan/command_handler.h>
+#include "user_interface.h"
+#include "command_handler.h"
 
 #define DEFAULT_TERM_WIDTH 80 /**< Default terminal width if detection fails */
 #define PROMPT_MAX_LEN 50     /**< Maximum length of command prompt */
@@ -201,7 +201,7 @@ int add_history(char *command)
  * @details Provides a command-line interface for debugger operations
  * @param[in,out] proc Pointer to the debug process structure
  */
-extern void interface_loop(struct inferior *inf)
+extern void interface_loop(struct sylvan_inferior *inf)
 {
 
     if (!inf)

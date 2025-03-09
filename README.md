@@ -6,7 +6,7 @@ An x86-64 debugger
 
 ### Prerequisites
 
-- Linux System (not sure if any linux specific things are used that posix compliant)
+- Linux System (not sure if any linux specific things are used that aren't posix compliant)
 - GCC compiler (GNU extensions are used)
 - make
 

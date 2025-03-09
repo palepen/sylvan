@@ -32,6 +32,6 @@ struct command_history
 // static int get_terminal_width();
 
 int add_history(char *command);
-extern void interface_loop(struct inferior *inf);
+extern void interface_loop(struct sylvan_inferior *inf);
 
 #endif

@@ -4,7 +4,7 @@
             "name": "linux",
             "intelliSenseMode": "linux-gcc-x64",
             "compilerPath": "/usr/bin/gcc",
-            "includePath": ["src/include"],
+            "includePath": ["include"],
             "compilerArgs": ["-D_GNU_SOURCE"]
         }
     ],
