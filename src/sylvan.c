@@ -100,7 +100,7 @@ void parse_args(int argc, char *argv[], struct cmd_args *cmd_args) {
 void error(const char *msg) {
     fprintf(stderr, msg);
     fprintf(stderr, "\n");
-    exit(EXIT_FAILURE);
+    // exit(EXIT_FAILURE);
 }
 
 int main(int argc, char *argv[]) {
@@ -133,19 +133,29 @@ int main(int argc, char *argv[]) {
             error(sylvan_get_last_error());
     }
 
-    int time = 10000000;
+    printf("s: single step\n");
+    printf("c: continue\n");
 
-    printf("continuing the process\n");
-    if (sylvan_continue(inf))
-        error(sylvan_get_last_error());
-    
-    printf("waiting for %dms \n", time / 1000);
-    usleep(time);
+    while (1) {
+        char buf[10];
+        scanf("%s", buf);
+        if (strcmp(buf, "s") == 0) {
+            if (sylvan_stepinst(inf))
+                error(sylvan_get_last_error());
+        } else if (strcmp(buf, "c") == 0) {
+            printf("continuing the process\n");
+            if (sylvan_continue(inf))
+                error(sylvan_get_last_error());
+            else
+                printf("program exited\n");
+            break;
+        } else {
+            break;
+        }
+    }
 
     if (sylvan_inferior_destroy(inf))
         error(sylvan_get_last_error());
-
-    printf("\nexiting\n");
 
     return EXIT_SUCCESS;
 

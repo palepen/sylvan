@@ -293,25 +293,66 @@ sylvan_code_t sylvan_set_args(struct sylvan_inferior *inf, const char *args) {
     return SYLVANE_OK;
 }
 
+static sylvan_code_t check_inf_stop(struct sylvan_inferior *inf) {
+    switch (inf->status) {
+        case SYLVAN_INFSTATE_NONE:
+            return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program isn't running");
+        case SYLVAN_INFSTATE_EXITED:
+            return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program has already exited");
+        case SYLVAN_INFSTATE_TERMINATED:
+            return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program has been terminated");
+        case SYLVAN_INFSTATE_RUNNING:
+            return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program is already running");
+        default:
+            return SYLVANE_OK;
+    }
+}
+
+static void ptrace_error(struct sylvan_inferior *inf) {
+    switch (errno) {
+        case ESRCH:
+            inf->is_attached = false;
+            inf->status = SYLVAN_INFSTATE_EXITED;
+            break;
+    }
+}
+
 sylvan_code_t sylvan_continue(struct sylvan_inferior *inf) {
     if (inf == NULL)
         return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    if (inf->status != SYLVAN_INFSTATE_STOPPED) {
-        switch (inf->status) {
-            case SYLVAN_INFSTATE_NONE:
-                return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program isn't running");
-            case SYLVAN_INFSTATE_EXITED:
-                return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program has already exited");
-            case SYLVAN_INFSTATE_TERMINATED:
-                return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program has been terminated");
-            case SYLVAN_INFSTATE_RUNNING:
-                return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program is already running");
-            default: /* should never happen */
-                break;
-        }
-    }
-    if (ptrace(PTRACE_CONT, inf->pid, NULL, NULL) < 0)
+    sylvan_code_t code = check_inf_stop(inf);
+    if (code)
+        return code;
+    if (ptrace(PTRACE_CONT, inf->pid, NULL, NULL) < 0) {
+        ptrace_error(inf);
         return sylvan_set_errno_msg(SYLVANE_PTRACE_CONT, "ptrace cont");
+    }
     inf->status = SYLVAN_INFSTATE_RUNNING;
+    int status;
+    pid_t result = waitpid(inf->pid, &status, 0);
+    if (result < 0)
+        return sylvan_set_errno_msg(SYLVANE_PROC_WAIT, "waitpid");
+
+    if (WIFEXITED(status))
+        inf->status = SYLVAN_INFSTATE_EXITED;
+    else
+    if (WIFSIGNALED(status))
+        inf->status = SYLVAN_INFSTATE_TERMINATED;
+    else
+    if (WIFSTOPPED(status))
+        inf->status = SYLVAN_INFSTATE_STOPPED;
+    return SYLVANE_OK;
+}
+
+sylvan_code_t sylvan_stepinst(struct sylvan_inferior *inf) {
+    if (inf == NULL)
+        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
+    sylvan_code_t code = check_inf_stop(inf);
+    if (code)
+        return code;
+    if (ptrace(PTRACE_SINGLESTEP, inf->pid, NULL, NULL) < 0) {
+        ptrace_error(inf);
+        return sylvan_set_errno_msg(SYLVANE_PTRACE_SSTEP, "ptrace single step");
+    }
     return SYLVANE_OK;
 }

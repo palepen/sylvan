@@ -32,5 +32,6 @@ sylvan_code_t sylvan_run(struct sylvan_inferior *inf);
 sylvan_code_t sylvan_set_filepath(struct sylvan_inferior *inf, const char *filepath);
 sylvan_code_t sylvan_set_args(struct sylvan_inferior *inf, const char *args);
 sylvan_code_t sylvan_continue(struct sylvan_inferior *inf);
+sylvan_code_t sylvan_stepinst(struct sylvan_inferior *inf);
 
 #endif /* SYLVAN_INFERIOR_H */
