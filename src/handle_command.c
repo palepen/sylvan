@@ -2,118 +2,164 @@
 #include <string.h>
 #include <sys/ptrace.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include <string.h>
 
 #include "handle_command.h"
 #include "sylvan/inferior.h"
+#include "utils.h"
+#include "command_handler.h"
 
-static size_t djb2_hash(char *str)
+size_t sylvan_command_size = 0;
+size_t sylvan_info_command_size = 0;
+
+#define HASH_TABLE_SIZE 128
+static void *command_table[HASH_TABLE_SIZE] = {NULL};
+
+
+struct sylvan_command_data sylvan_commands[] = {
+    #define DEFINE_COMMAND(name, desc, handler, id) \
+        {#name, desc, handler, "handle_" #name, 0, id}
+    
+    #include "details/standard_commands.inc"
+    #undef DEFINE_COMMAND
+    {NULL, NULL, NULL, NULL, 0, 0}
+};
+
+
+
+struct sylvan_info_command sylvan_info_commands[] = {
+    #define DEFINE_COMMAND(name, desc, handler, id) \
+        {#name, desc, handler, "handle_info_" #name, 0, id}
+    #include "details/info_commands.inc"
+    #undef DEFINE_COMMAND
+    {NULL, NULL, NULL, NULL,0, 0}
+};
+
+
+static long long hash_string(const char *str)
 {
-    size_t hash = 5381;
+    long long hash = 5381;
     int c;
-
     while ((c = *str++))
     {
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+        hash = ((hash << 5) + hash) + c; // hash * 33 + c
     }
     return hash;
 }
 
-
-
-struct command_data commands_available[] =
+/**
+ * @brief Initializes the command hash table and sets handler functions, function names, and hashes
+ */
+void init_commands()
 {
-    #define DEFINE_COMMAND(name, desc, t)  \
-    {name, desc, 0, t}
-    #include "details/commands.inc"
-    #undef DEFINE_REGISTER
-    {NULL, NULL, 0, 0}
-};
+    int i = 0;
 
-int create_hash()
-{
-    size_t i = 0;
-    while (commands_available[i].name && commands_available[i].desc)
+    // Initialize standard commands
+    while (sylvan_commands[i].name && sylvan_commands[i].desc)
     {
-        commands_available[i].hash = djb2_hash(commands_available[i].name);
-        i++;
-    }
-    return 0;
-}
-
-
-static void print_commands(enum command_type tp)
-{
-    printf("Commands:\n");
-    size_t i = 0;
-    while (commands_available[i].name && commands_available[i].desc)
-    {
-        
-        if (commands_available[i].cmd_type != tp)
+        sylvan_commands[i].hash = hash_string(sylvan_commands[i].name);
+        unsigned long hash = sylvan_commands[i].hash % HASH_TABLE_SIZE;
+        while (command_table[hash] != NULL)
         {
-            i++;
-            continue;
+            hash = (hash + 1) % HASH_TABLE_SIZE;
         }
-    
-        printf("    %s  - %s\n", commands_available[i].name, commands_available[i].desc);
+        command_table[hash] = &sylvan_commands[i]; // Store pointer to command struct
+
+        i++;
+    }
+
+    // Initialize info commands
+    i = 0;
+    while (sylvan_info_commands[i].name && sylvan_info_commands[i].desc)
+    {
+        char full_name[256];
+        snprintf(full_name, sizeof(full_name), "info %s", sylvan_info_commands[i].name);
+        sylvan_info_commands[i].hash = hash_string(full_name);
+        unsigned long hash = sylvan_info_commands[i].hash % HASH_TABLE_SIZE;
+        while (command_table[hash] != NULL)
+        {
+            hash = (hash + 1) % HASH_TABLE_SIZE;
+        }
+        command_table[hash] = &sylvan_info_commands[i]; // Store pointer to info command struct
         i++;
     }
 }
+
 
 /**
- * @brief handles the input commands by the users
- * @param [in] command command provided by the user
- * @param [in] inf the sylvan_inferior which the user is working on
- * @return 0 if success 1 if failure   
+ * @brief Handles the input commands by the user
+ * @param[in] command Command provided by the user
+ * @param[in] inf The sylvan_inferior being debugged
+ * @return 0 on success, 1 on failure (e.g., quit)
  */
-
 int handle_command(char **command, struct sylvan_inferior *inf)
 {
 
+    long long input_hash = hash_string(command[0]);
+    unsigned long hash = input_hash % HASH_TABLE_SIZE;
+    size_t original_hash = hash;
 
-    size_t hash_cmd = djb2_hash(command[0]);
-
-    if (commands_available[0].hash == hash_cmd)
+    while (command_table[hash] != NULL)
     {
-        print_commands(SYLVAN_STANDARD_COMMAND);
-    }
-    else if (commands_available[1].hash == hash_cmd)
-    {
-        
-        printf("Exiting Debugger\n");
-        return 1;
-    }
-    else if (commands_available[2].hash == hash_cmd)
-    {
-        if (inf->status != SYLVAN_INFSTATE_STOPPED)
+        struct sylvan_command_data *cmd = (struct sylvan_command_data *)command_table[hash];
+        if (cmd->hash == input_hash)
         {
-            printf("Process is not stopped\n");
+            if (strcmp(cmd->name, command[0]) == 0)
+            {
+                if(cmd->id == 5 && command[1] != NULL)
+                {
+                    break;
+                }
+                if (cmd->handler)
+                {
+                    return cmd->handler(command, inf);
+                }
+                else
+                {
+                    printf("Command recognized but not implemented: %s \n", command[0]);
+                    return 0;
+                }
+            }
         }
-        else if (sylvan_continue(inf) < 0)
+        hash = (hash + 1) % HASH_TABLE_SIZE;
+        if (hash == original_hash)
+        break;
+    }
+ 
+
+    if (command[1] != NULL)
+    {
+        char full_command[256];
+        snprintf(full_command, sizeof(full_command), "%s %s", command[0], command[1]);
+        input_hash = hash_string(full_command);
+        hash = input_hash % HASH_TABLE_SIZE;
+        original_hash = hash;
+
+        while (command_table[hash] != NULL)
         {
-            
-            fprintf(stderr, "Failed to continue process\n");
-            return 1;
+            struct sylvan_info_command *info_cmd = (struct sylvan_info_command *)command_table[hash];
+            if (info_cmd->hash == input_hash && strcmp(info_cmd->name, command[1]) == 0 && info_cmd->id >= 101)
+            {
+                if (info_cmd->handler)
+                {
+                    return info_cmd->handler(command, inf);
+                }
+                else
+                {
+                    printf("Info command recognized but not implemented: %s %s\n",
+                           command[0], command[1]);
+                    return 0;
+                }
+            }
+            hash = (hash + 1) % HASH_TABLE_SIZE;
+            if (hash == original_hash)
+                break;
         }
     }
-    else if(commands_available[4].hash == hash_cmd)
-    {
-        if(command[1] == NULL)
-            print_commands(SYLVAN_INFO_COMMAND);
-        
 
-        
-        
-    }
-    else
-    {
-
-        printf("Unknown command: %s\n", command);
-        printf("Type 'help' for available commands\n");
-    }
-
+    printf("Unknown command: %s\n", command[0]);
+    printf("Type 'help' for available commands\n");
     return 0;
 }
+

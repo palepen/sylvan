@@ -16,8 +16,12 @@
 #define BG_RED     "\033[41m"
 #define BG_GREEN   "\033[42m"
 #define BG_BLUE    "\033[44m"
-#define INITIAL_BUFFER_SIZE 64  // Start with 64 bytes, grow dynamically
 #define MAX_HISTORY 100         // Maximum stored commands
+
+#define DEFAULT_TERM_WIDTH 80 /**< Default terminal width if detection fails */
+#define PROMPT_MAX_LEN 50     /**< Maximum length of command prompt */
+#define INITIAL_BUFFER_SIZE 128
+#define INITIAL_ARG_COUNT 10
 
 struct command_history
 {

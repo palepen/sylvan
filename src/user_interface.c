@@ -9,14 +9,9 @@
 #include "user_interface.h"
 #include "handle_command.h"
 
-#define DEFAULT_TERM_WIDTH 80 /**< Default terminal width if detection fails */
-#define PROMPT_MAX_LEN 50     /**< Maximum length of command prompt */
 int history_count = 0;
-
 struct command_history *history;
 
-#define INITIAL_BUFFER_SIZE 128
-#define INITIAL_ARG_COUNT 10
 
 /**
  * @brief Reads a command from standard input and splits it into an array of arguments.
@@ -315,7 +310,7 @@ extern void interface_loop(struct sylvan_inferior *inf)
     }
 
     print_heading();
-    create_hash();
+    init_commands();
 
     char prompt[PROMPT_MAX_LEN];
     snprintf(prompt, sizeof(prompt),
@@ -336,12 +331,12 @@ extern void interface_loop(struct sylvan_inferior *inf)
         {
             break;
         }
-        
         if (handle_command(line, inf))
         {
             free_command(line);
             break;
         }
+
         free_command(line);
     }
 
