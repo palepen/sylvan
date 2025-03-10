@@ -127,21 +127,25 @@ int main(int argc, char *argv[]) {
     if (cmd_args.is_attached) {
         if (sylvan_attach_pid(inf, cmd_args.pid))
             error(sylvan_get_last_error());
-    } else if (cmd_args.filepath) {
+    } else if (inf->realpath) {
+        printf("exec file: %s\n", inf->realpath);
         if (sylvan_run(inf))
             error(sylvan_get_last_error());
     }
 
     int time = 10000000;
 
-    printf("waiting for %dms \n", time / 1000);
-    usleep(10000000);
     printf("continuing the process\n");
-    
     if (sylvan_continue(inf))
         error(sylvan_get_last_error());
+    
+    printf("waiting for %dms \n", time / 1000);
+    usleep(time);
 
-    sylvan_inferior_destroy(inf);
+    if (sylvan_inferior_destroy(inf))
+        error(sylvan_get_last_error());
+
+    printf("\nexiting\n");
 
     return EXIT_SUCCESS;
 

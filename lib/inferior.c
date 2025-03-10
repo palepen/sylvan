@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -143,19 +144,81 @@ sylvan_code_t sylvan_inferior_destroy(struct sylvan_inferior *inf) {
 }
 
 static void handle_child(struct sylvan_inferior *inf) {
+    
+    // TODO: send the errno to parent + terminal handling
     if (ptrace(PTRACE_TRACEME, 0, NULL, NULL) < 0)
         _exit(EXIT_FAILURE);
     
-    int len = 4 + strlen(inf->realpath); // 2 quotes + 1 space + 1 '\0' = 4
-    if (inf->args)
-        len += strlen(inf->args);
-    char *cmd = malloc(len);
-    if (cmd == NULL)
+    char **argv = NULL;
+    int argc = 0;
+    
+    argv = malloc(sizeof(char *) * (argc + 2));
+    if (argv == NULL)
         _exit(EXIT_FAILURE);
-    snprintf(cmd, len, "\"%s\" %s", inf->realpath, inf->args ? inf->args : "");
-    char *args[] = {"/bin/sh", "-c", cmd, NULL};
-    execvp(args[0], args);
-    free(cmd);
+    
+    argv[argc++] = strdup(inf->realpath);
+    // TODO: do a single malloc at start and a single realloc at the end
+    if (inf->args && *inf->args) {
+        const char *p = inf->args;
+        char *arg_buffer = malloc(strlen(inf->args) + 1);
+        if (arg_buffer == NULL) {
+            free(argv[0]);
+            free(argv);
+            _exit(EXIT_FAILURE);
+        }
+        
+        while (*p) {
+            while (*p && isspace(*p))
+                p++;
+            if (!*p)
+                break;
+            
+            char *dest = arg_buffer;
+            int double_quotes = 0;
+            int single_quotes = 0;
+            
+            while (*p) {
+                if (*p == '\\' && *(p + 1)) {
+                    *dest++ = *(p + 1);
+                    p += 2;
+                } else if (*p == '"' && !single_quotes) {
+                    double_quotes = !double_quotes;
+                    p++;
+                } else if (*p == '\'' && !double_quotes) {
+                    single_quotes = !single_quotes;
+                    p++;
+                } else if (isspace(*p) && !double_quotes && !single_quotes) {
+                    break;
+                } else {
+                    *dest++ = *p++;
+                }
+            }
+            
+            *dest = '\0';
+            
+            argv = realloc(argv, sizeof(char *) * (argc + 2));
+            if (argv == NULL) {
+                free(arg_buffer);
+                for (int i = 0; i < argc; i++)
+                    free(argv[i]);
+                free(argv);
+                _exit(EXIT_FAILURE);
+            }
+            
+            argv[argc++] = strdup(arg_buffer);
+        }
+        
+        free(arg_buffer);
+    }
+    
+    argv[argc] = NULL;
+    
+    execvp(inf->realpath, argv);
+
+    for (int i = 0; i < argc; i++)
+        free(argv[i]);
+    free(argv);
+    
     _exit(EXIT_FAILURE);
 }
 
@@ -233,7 +296,7 @@ sylvan_code_t sylvan_set_args(struct sylvan_inferior *inf, const char *args) {
 sylvan_code_t sylvan_continue(struct sylvan_inferior *inf) {
     if (inf == NULL)
         return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    if (inf->status == SYLVAN_INFSTATE_STOPPED) {
+    if (inf->status != SYLVAN_INFSTATE_STOPPED) {
         switch (inf->status) {
             case SYLVAN_INFSTATE_NONE:
                 return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program isn't running");

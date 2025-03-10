@@ -31,7 +31,7 @@ or
 ## TODO
 
 - ~~attach to a process~~
-- run a process
+- ~~run a process~~
 - software breakpoints
 - hardware breakpoints
 - watch points
