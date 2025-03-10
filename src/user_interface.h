@@ -21,17 +21,11 @@
 
 struct command_history
 {
-    char *command;
+    char **command;
+    size_t arg_count;
     struct command_history* next;
 };
 
-// static void clear_screen();
-// static void print_heading();
-// static char *get_command(const char *prompt);
-// static void free_history();
-// static int get_terminal_width();
-
-int add_history(char *command);
 extern void interface_loop(struct sylvan_inferior *inf);
 
 #endif

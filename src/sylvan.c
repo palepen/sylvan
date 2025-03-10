@@ -135,11 +135,13 @@ int main(int argc, char *argv[]) {
     int time = 10000000;
 
     printf("waiting for %dms \n", time / 1000);
-    usleep(10000000);
+    // usleep(10000000);
     printf("continuing the process\n");
+
+    interface_loop(inf);
     
-    if (sylvan_continue(inf))
-        error(sylvan_get_last_error());
+    // if (sylvan_continue(inf))
+    //     error(sylvan_get_last_error());
 
     sylvan_inferior_destroy(inf);
 
