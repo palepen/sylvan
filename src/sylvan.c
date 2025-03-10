@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/user.h>
 #include <sylvan/inferior.h>
 #include "cmd.h"
 #include "user_interface.h"
@@ -110,7 +111,7 @@ int main(int argc, char *argv[]) {
 
     parse_args(argc, argv, &cmd_args);
 
-    // temporary code
+    printf("running temporary program before the cli is ready\n");
 
     struct sylvan_inferior *inf;
     if (sylvan_inferior_create(&inf))
@@ -135,22 +136,53 @@ int main(int argc, char *argv[]) {
 
     printf("s: single step\n");
     printf("c: continue\n");
+    printf("r: regs (rip, rsp, rax)\n");
+    printf("a: set rax\n");
+    printf("q: quit\n");
 
-    while (1) {
-        char buf[10];
-        scanf("%s", buf);
-        if (strcmp(buf, "s") == 0) {
-            if (sylvan_stepinst(inf))
-                error(sylvan_get_last_error());
-        } else if (strcmp(buf, "c") == 0) {
-            printf("continuing the process\n");
-            if (sylvan_continue(inf))
-                error(sylvan_get_last_error());
-            else
-                printf("program exited\n");
-            break;
-        } else {
-            break;
+    struct user_regs_struct regs = {};
+
+    char ch;
+
+    bool cont = true;
+
+
+    while (cont) {
+        printf("sylvan> ");
+        scanf(" %c", &ch);
+        switch (ch) {
+            case 'a':
+                if (sylvan_get_regs(inf, &regs)) {
+                    error(sylvan_get_last_error());
+                } else {
+                    printf("value: ");
+                    scanf("%lld", &regs.rax);
+                    if (sylvan_set_regs(inf, &regs))
+                        error(sylvan_get_last_error());
+                }
+                break;
+            case 'c':
+                if (sylvan_continue(inf))
+                    error(sylvan_get_last_error());
+                else
+                    printf("program exited\n");
+                break;
+            case 'r':
+                if (sylvan_get_regs(inf, &regs)) {
+                    error(sylvan_get_last_error());
+                } else {
+                    printf("rip: %llx\n", regs.rip);
+                    printf("rsp: %llx\n", regs.rsp);
+                    printf("rax: %llx\n", regs.rax);
+                }
+                break;
+            case 's':
+                if (sylvan_stepinst(inf))
+                    error(sylvan_get_last_error());
+                break;
+            case 'q':
+                cont = false;
+                break;
         }
     }
 

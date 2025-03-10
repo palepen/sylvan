@@ -4,6 +4,7 @@
 #include <sylvan/error.h>
 #include <stdbool.h>
 #include <sys/types.h>
+#include <sys/user.h>
 
 typedef enum {
     SYLVAN_INFSTATE_NONE,
@@ -33,5 +34,7 @@ sylvan_code_t sylvan_set_filepath(struct sylvan_inferior *inf, const char *filep
 sylvan_code_t sylvan_set_args(struct sylvan_inferior *inf, const char *args);
 sylvan_code_t sylvan_continue(struct sylvan_inferior *inf);
 sylvan_code_t sylvan_stepinst(struct sylvan_inferior *inf);
+sylvan_code_t sylvan_get_regs(struct sylvan_inferior *inf, struct user_regs_struct *regs);
+sylvan_code_t sylvan_set_regs(struct sylvan_inferior *inf, const struct user_regs_struct *regs);
 
 #endif /* SYLVAN_INFERIOR_H */

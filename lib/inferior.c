@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <sys/ptrace.h>
+#include <sys/user.h>
 #include <sys/wait.h>
 #include <sylvan/inferior.h>
 #include "error.h"
@@ -353,6 +354,30 @@ sylvan_code_t sylvan_stepinst(struct sylvan_inferior *inf) {
     if (ptrace(PTRACE_SINGLESTEP, inf->pid, NULL, NULL) < 0) {
         ptrace_error(inf);
         return sylvan_set_errno_msg(SYLVANE_PTRACE_SSTEP, "ptrace single step");
+    }
+    return SYLVANE_OK;
+}
+
+sylvan_code_t sylvan_get_regs(struct sylvan_inferior *inf, struct user_regs_struct *regs) {
+    if (inf == NULL || regs == NULL)
+        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
+    if (inf->status != SYLVAN_INFSTATE_STOPPED && inf->status != SYLVAN_INFSTATE_RUNNING)
+        return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program isn't running");
+    if (ptrace(PTRACE_GETREGS, inf->pid, NULL, regs) < 0) {
+        ptrace_error(inf);
+        return  sylvan_set_errno_msg(SYLVANE_PTRACE_GETREGS, "ptrace get regs");
+    }
+    return SYLVANE_OK;
+}
+
+sylvan_code_t sylvan_set_regs(struct sylvan_inferior *inf, const struct user_regs_struct *regs) {
+    if (inf == NULL || regs == NULL)
+        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
+    if (inf->status != SYLVAN_INFSTATE_STOPPED && inf->status != SYLVAN_INFSTATE_RUNNING)
+        return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program isn't running");
+    if (ptrace(PTRACE_SETREGS, inf->pid, NULL, regs) < 0) {
+        ptrace_error(inf);
+        return  sylvan_set_errno_msg(SYLVANE_PTRACE_SETREGS, "ptrace set regs");
     }
     return SYLVANE_OK;
 }

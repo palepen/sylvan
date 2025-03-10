@@ -33,7 +33,7 @@ or
 - ~~attach to a process~~
 - ~~run a process~~
 - ~~single step~~
-- regs
+- ~~regs~~
 - breakpoints
 - step
 - software watchpoints
