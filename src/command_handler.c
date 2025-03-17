@@ -1,8 +1,13 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <elf.h>
+
 
 #include "sylvan/inferior.h"
 #include "command_handler.h"
 #include "handle_command.h"
+#include "auxv.h"
 
 /**
  * @brief Prints available commands or info subcommands
@@ -31,10 +36,14 @@ static void print_commands(enum sylvan_command_type tp)
     }
 }
 
-
 /** @brief Handler for 'help' command */
 int handle_help(char **command, struct sylvan_inferior *inf)
 {
+    // supress warnings;
+    (void)command;
+    (void)inf;
+
+
     print_commands(SYLVAN_STANDARD_COMMAND);
     return 0;
 }
@@ -42,6 +51,10 @@ int handle_help(char **command, struct sylvan_inferior *inf)
 /** @brief Handler for 'quit' command */
 int handle_exit(char **command, struct sylvan_inferior *inf)
 {
+    // supress warnings;
+    (void)command;
+    (void)inf;
+
     printf("Exiting Debugger\n");
     return 1;
 }
@@ -49,6 +62,9 @@ int handle_exit(char **command, struct sylvan_inferior *inf)
 /** @brief Handler for 'continue' command */
 int handle_continue(char **command, struct sylvan_inferior *inf)
 {
+    // supress warnings;
+    (void)command;
+
     if (inf->status != SYLVAN_INFSTATE_STOPPED)
     {
         printf("Process is not stopped\n");
@@ -65,10 +81,97 @@ int handle_continue(char **command, struct sylvan_inferior *inf)
 /** @brief Handler for 'info' command */
 int handle_info(char **command, struct sylvan_inferior *inf)
 {
-    if (command[1] == NULL)
+    // supress warnings;
+    (void)command;
+    (void)inf;
+
+    print_commands(SYLVAN_INFO_COMMAND);
+    return 0;
+}
+
+/**
+ * @brief Handler for info address command
+ * @return 0 if success 1 for failure
+ */
+int handle_info_address(char **command, struct sylvan_inferior *inf)
+{
+    // supress warnings;
+    (void)command;
+    (void)inf;
+
+
+    printf("Symbol Table Required\n");
+    return 0;
+}
+
+/**
+ * @brief Handler for info all-address command
+ * @return 0 if success 1 for failure
+ */
+int handle_info_all_registers(char **command, struct sylvan_inferior *inf)
+{
+    // supress warnings;
+    (void)command;
+    (void)inf;
+
+
+    printf("No Registers now\n");
+    return 0;
+}
+
+int handle_info_args(char **command, struct sylvan_inferior *inf)
+{
+    (void)inf;
+    (void)command;
+    printf("Done by reading the registers\n");
+    return 0;
+}
+
+int handle_info_auto_load(char **command, struct sylvan_inferior *inf)
+{
+    // supress warnings;
+    (void)command;
+    (void)inf;
+
+
+    printf("no auto-load support\n");
+    return 0;
+}
+
+int handle_info_auxv(char **command, struct sylvan_inferior *inf)
+{
+    // supress warnings;
+    (void)command;
+
+    if(!inf)
     {
-        print_commands(SYLVAN_INFO_COMMAND);
-        return 0;
+        fprintf(stderr, "Null Inferior Pointer\n");
+        return -1;
     }
-    return handle_command(command, inf); // Re-run with full command for subcommand
+
+    size_t len;
+    unsigned char *raw_auxv = target_read_auxv(inf, &len);
+
+    if(!raw_auxv)
+    {
+        return -1;
+    }
+
+    struct auxv_entry *entries = parse_auxv(raw_auxv, len, 1);
+    free(raw_auxv);
+
+    if(!entries)
+    {
+        fprintf(stderr, "Error: Failed to parse auxv");
+        return -1;
+    }
+    
+    printf("Auxiliary Vector for PID %d:\n", inf->pid);
+    printf("Type  Value                 Name                Description\n");
+    printf("----  --------------------  --------            -----------\n");
+    for (size_t i = 0; entries[i].type != AT_NULL; i++) {
+        print_auxv_entry(&entries[i]);
+    }
+
+    return 0;
 }

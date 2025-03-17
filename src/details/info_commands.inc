@@ -2,11 +2,11 @@
 #error "This file is intended for textual inclusion with the DEFINE_COMMAND macro defined"
 #endif
 
-DEFINE_COMMAND(address, "Describe where symbol SYM is stored.", NULL, 101),
-DEFINE_COMMAND(all-registers, "List of all registers and their contents, for selected stack frame.", NULL, 102),
-DEFINE_COMMAND(args, "All argument variables of current stack frame or those matching REGEXPs.", NULL, 103),
-DEFINE_COMMAND(auto-load, "Print current status of auto-loaded files.", NULL, 104),
-DEFINE_COMMAND(auxv, "Display the inferior's auxiliary vector.", NULL, 105),
+DEFINE_COMMAND(address, "Describe where symbol SYM is stored.", handle_info_address, 101),
+DEFINE_COMMAND(all-registers, "List of all registers and their contents, for selected stack frame.", handle_info_all_registers, 102),
+DEFINE_COMMAND(args, "All argument variables of current stack frame or those matching REGEXPs.", handle_info_args, 103),
+DEFINE_COMMAND(auto-load, "Print current status of auto-loaded files.", handle_info_auto_load, 104),
+DEFINE_COMMAND(auxv, "Display the inferior's auxiliary vector.", handle_info_auxv, 105),
 DEFINE_COMMAND(bookmarks, "Status of user-settable bookmarks.", NULL, 106),
 DEFINE_COMMAND(breakpoints, "Status of specified breakpoints (all user-settable breakpoints if no argument).", NULL, 107),
 DEFINE_COMMAND(checkpoints, "IDs of currently known checkpoints.", NULL, 108),

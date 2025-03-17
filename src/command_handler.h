@@ -6,5 +6,10 @@ int handle_help(char **command, struct sylvan_inferior *inf);
 int handle_exit(char **command, struct sylvan_inferior *inf);
 int handle_continue(char **command, struct sylvan_inferior *inf);
 int handle_info(char **command, struct sylvan_inferior *inf);
+int handle_info_address(char **command, struct sylvan_inferior *inf);
+int handle_info_args(char **command, struct sylvan_inferior *inf);
+int handle_info_auto_load(char **command, struct sylvan_inferior *inf);
+int handle_info_auxv(char **command, struct sylvan_inferior *inf);
+int handle_info_all_registers(char **command, struct sylvan_inferior *inf);
 
 #endif
