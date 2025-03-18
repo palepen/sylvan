@@ -33,7 +33,7 @@ unsigned char *target_read_auxv(struct sylvan_inferior *inf, size_t *len)
     char path[32];
     if (snprintf(path, sizeof(path), "/proc/%d/auxv", inf->pid) >= (int)sizeof(path))
     {
-        fprintf(stderr, "Pid Error: PID too large for path buffer");
+        fprintf(stderr, "Pid Error: PID too large for path buffer\n");
         return NULL;
     }
 
@@ -41,7 +41,7 @@ unsigned char *target_read_auxv(struct sylvan_inferior *inf, size_t *len)
     int fd = open(path, O_RDONLY);
     if (fd == -1)
     {
-        fprintf(stderr, "Read Error: Failed to open %s", path);
+        fprintf(stderr, "Read Error: Failed to open %s\n", path);
         return NULL;
     }
 
@@ -51,7 +51,7 @@ unsigned char *target_read_auxv(struct sylvan_inferior *inf, size_t *len)
     if (!buffer)
     {
         close(fd);
-        fprintf(stderr, "Memory Error: Failed to allocate memory for auxv buffer");
+        fprintf(stderr, "Memory Error: Failed to allocate memory for auxv buffer\n");
         return NULL;
     }
 
@@ -61,7 +61,7 @@ unsigned char *target_read_auxv(struct sylvan_inferior *inf, size_t *len)
     {
         free(buffer);
         close(fd);
-        fprintf(stderr, "Read Error: Failed to read %s", path);
+        fprintf(stderr, "Read Error: Failed to read %s\n", path);
         return NULL;
     }
 
@@ -69,7 +69,7 @@ unsigned char *target_read_auxv(struct sylvan_inferior *inf, size_t *len)
     {
         free(buffer);
         close(fd);
-        fprintf(stderr, "Error: Auxv data exceeds buffer size (%zu bytes)", initial_size);
+        fprintf(stderr, "Error: Auxv data exceeds buffer size (%zu bytes)\n", initial_size);
         return NULL;
     }
 

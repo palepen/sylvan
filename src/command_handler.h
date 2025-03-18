@@ -11,5 +11,9 @@ int handle_info_args(char **command, struct sylvan_inferior *inf);
 int handle_info_auto_load(char **command, struct sylvan_inferior *inf);
 int handle_info_auxv(char **command, struct sylvan_inferior *inf);
 int handle_info_all_registers(char **command, struct sylvan_inferior *inf);
+int handle_info_bookmark(char **command, struct sylvan_inferior *inf);
+int handle_info_breakpoints(char **command, struct sylvan_inferior *inf);
+int handle_info_copying(char **command, struct sylvan_inferior *inf);
+int handle_info_inferiors(char **command, struct sylvan_inferior *inf);
 
 #endif
