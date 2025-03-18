@@ -172,6 +172,6 @@ int handle_info_auxv(char **command, struct sylvan_inferior *inf)
     for (size_t i = 0; entries[i].type != AT_NULL; i++) {
         print_auxv_entry(&entries[i]);
     }
-
+    free(entries);
     return 0;
 }

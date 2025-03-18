@@ -21,7 +21,7 @@ struct sylvan_command_data sylvan_commands[] = {
     #define DEFINE_COMMAND(name, desc, handler, id) \
         {#name, desc, handler, "handle_" #name, 0, id}
     
-    #include "details/standard_commands.inc"
+    #include "details/standard_commands.def"
     #undef DEFINE_COMMAND
     {NULL, NULL, NULL, NULL, 0, 0}
 };
@@ -31,7 +31,7 @@ struct sylvan_command_data sylvan_commands[] = {
 struct sylvan_info_command sylvan_info_commands[] = {
     #define DEFINE_COMMAND(name, desc, handler, id) \
         {#name, desc, handler, "handle_info_" #name, 0, id}
-    #include "details/info_commands.inc"
+    #include "details/info_subcommands.def"
     #undef DEFINE_COMMAND
     {NULL, NULL, NULL, NULL,0, 0}
 };
