@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -9,8 +10,9 @@
 #include <sys/ptrace.h>
 #include <sys/user.h>
 #include <sys/wait.h>
-#include <sylvan/inferior.h>
+#include <wordexp.h>
 
+#include <sylvan/inferior.h>
 #include "error.h"
 #include "utils.h"
 
@@ -131,76 +133,27 @@ static void handle_child(struct sylvan_inferior *inf) {
     // TODO: send the errno to parent + terminal handling
     if (ptrace(PTRACE_TRACEME, 0, NULL, NULL) < 0)
         _exit(EXIT_FAILURE);
-    
-    char **argv = NULL;
-    int argc = 0;
-    
-    argv = malloc(sizeof(char *) * (argc + 2));
-    if (argv == NULL)
-        _exit(EXIT_FAILURE);
-    
-    argv[argc++] = strdup(inf->realpath);
-    // TODO: do a single malloc at start and a single realloc at the end
-    if (inf->args && *inf->args) {
-        const char *p = inf->args;
-        char *arg_buffer = malloc(strlen(inf->args) + 1);
-        if (arg_buffer == NULL) {
-            free(argv[0]);
-            free(argv);
-            _exit(EXIT_FAILURE);
-        }
-        
-        while (*p) {
-            while (*p && isspace(*p))
-                p++;
-            if (!*p)
-                break;
-            
-            char *dest = arg_buffer;
-            int double_quotes = 0;
-            int single_quotes = 0;
-            
-            while (*p) {
-                if (*p == '\\' && *(p + 1)) {
-                    *dest++ = *(p + 1);
-                    p += 2;
-                } else if (*p == '"' && !single_quotes) {
-                    double_quotes = !double_quotes;
-                    p++;
-                } else if (*p == '\'' && !double_quotes) {
-                    single_quotes = !single_quotes;
-                    p++;
-                } else if (isspace(*p) && !double_quotes && !single_quotes) {
-                    break;
-                } else {
-                    *dest++ = *p++;
-                }
-            }
-            
-            *dest = '\0';
-            
-            argv = realloc(argv, sizeof(char *) * (argc + 2));
-            if (argv == NULL) {
-                free(arg_buffer);
-                for (int i = 0; i < argc; i++)
-                    free(argv[i]);
-                free(argv);
-                _exit(EXIT_FAILURE);
-            }
-            
-            argv[argc++] = strdup(arg_buffer);
-        }
-        
-        free(arg_buffer);
-    }
-    
-    argv[argc] = NULL;
-    
-    execvp(inf->realpath, argv);
 
-    for (int i = 0; i < argc; i++)
-        free(argv[i]);
-    free(argv);
+    assert(inf->realpath != NULL);
+
+    size_t args_len = inf->args == NULL ? 0 : strlen(inf->args);
+    size_t path_len = strlen(inf->realpath);
+
+    char *args = malloc(path_len + 1 + (args_len ? args_len + 1 : 0)); // path + '\0' or path + ' ' + args + '\0'
+    memcpy(args, inf->realpath, path_len);
+
+    char **argv = (char*[]){ args, NULL }; // https://gcc.gnu.org/onlinedocs/gcc/Compound-Literals.html
+
+    if (inf->args != NULL) {
+        args[path_len] = ' ';
+        memcpy(args + path_len + 1, inf->args, args_len + 1); // args + '\0'
+        wordexp_t p;
+        if (wordexp(args, &p, 0))
+            _exit(EXIT_FAILURE);
+        argv = p.we_wordv;
+    }
+
+    execvp(inf->realpath, argv);
     
     _exit(EXIT_FAILURE);
 }
