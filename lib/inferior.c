@@ -10,7 +10,9 @@
 #include <sys/user.h>
 #include <sys/wait.h>
 #include <sylvan/inferior.h>
+
 #include "error.h"
+#include "utils.h"
 
 static int sylvan_inferior_idx = 0;
 static int sylvan_inferior_count = 0;
@@ -82,27 +84,6 @@ static sylvan_code_t reset_inferior_state(struct sylvan_inferior *inf) {
     return code;
 }
 
-
-/**
- * @brief finds the real (absolute) path of a file given its path
- * @param filepath file path
- * @return a malloced string of real path or NULL in case of failure
- */
-static char *get_realpath_file(const char *filepath) {
-    return realpath(filepath, NULL);
-}
-
-/**
- * @brief finds the real (absolute) path of the process's executable given its pid
- * @param pid process id
- * @return a malloced string of real path or NULL in case of failure
- */
-static char *get_realpath_pid(pid_t pid) {
-    char exepath[64];
-    sprintf(exepath, "/proc/%d/exe", pid);
-    return get_realpath_file(exepath);
-}
-
 /**
  * @brief attaches to a process given its pid
  */
@@ -122,8 +103,9 @@ sylvan_code_t sylvan_attach_pid(struct sylvan_inferior *inf, pid_t pid) {
     inf->pid = pid;
     inf->status = SYLVAN_INFSTATE_STOPPED;
     free(inf->realpath);
-    // it's okay for the real path to be null since this is an attached process
-    inf->realpath = get_realpath_pid(inf->pid);
+    // MAYBE: warn that real path wasn't available
+    if ((code = sylvan_real_path_pid(inf->pid, &inf->realpath)))
+        inf->realpath = NULL;
     inf->is_attached = true;
     return code;
 }
@@ -265,11 +247,14 @@ sylvan_code_t sylvan_run(struct sylvan_inferior *inf) {
 sylvan_code_t sylvan_set_filepath(struct sylvan_inferior *inf, const char *filepath) {
     if (inf == NULL)
         return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    if (filepath == NULL)
-        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    char *newpath = get_realpath_file(filepath);
-    if (newpath == NULL)
-        return sylvan_set_code(SYLVANE_NOEXEC);
+    if (filepath == NULL)  {
+        free(inf->realpath);
+        return SYLVANE_OK;
+    }
+    char *newpath;
+    sylvan_code_t code;
+    if ((code = sylvan_canonical_path(filepath, &newpath)))
+        return code;
     free(inf->realpath);
     inf->realpath = newpath;
     return SYLVANE_OK;
