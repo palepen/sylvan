@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (cmd_args.is_attached) {
-        if (sylvan_attach_pid(inf, cmd_args.pid))
+        if (sylvan_attach(inf, cmd_args.pid))
             error(sylvan_get_last_error());
     } else if (inf->realpath) {
         printf("exec file: %s\n", inf->realpath);

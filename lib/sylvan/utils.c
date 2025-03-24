@@ -12,12 +12,15 @@
  * see lib/utils.h
  */
 sylvan_code_t sylvan_real_path(const char *filepath, char **real_path) {
+
     assert(filepath != NULL && real_path != NULL);
+
     char *path = realpath(filepath, NULL);
     if (path == NULL)
-        return SYLVANE_NOFILE;
+        return sylvan_set_code(SYLVANC_FILE_NOT_FOUND);
+
     *real_path = path;
-    return SYLVANE_OK;
+    return SYLVANC_OK;
 }
 
 /**
@@ -29,12 +32,12 @@ sylvan_code_t sylvan_find_in_PATH(const char *command, char **filepath) {
 
     char *path = getenv("PATH");
     if (path == NULL)
-        return sylvan_set_errno(SYLVANE_FILEPATH);
+        return sylvan_set_code(SYLVANC_FILE_NOT_FOUND);
 
     size_t command_len = strlen(command);
     path = strdup(path);
     if (path == NULL)
-        return sylvan_set_errno(SYLVANE_OUT_OF_MEMORY);
+        return sylvan_set_code(SYLVANC_OUT_OF_MEMORY);
 
     char *token = strtok(path, ":");
     while (token) {
@@ -43,7 +46,7 @@ sylvan_code_t sylvan_find_in_PATH(const char *command, char **filepath) {
         char *full_path = malloc(path_len);
         if (full_path == NULL) {
             free(path);
-            return sylvan_set_errno(SYLVANE_OUT_OF_MEMORY);
+            return sylvan_set_code(SYLVANC_OUT_OF_MEMORY);
         }
 
         memcpy(full_path, token, token_len);
@@ -53,7 +56,7 @@ sylvan_code_t sylvan_find_in_PATH(const char *command, char **filepath) {
         if (access(full_path, X_OK) == 0) {
             *filepath = full_path;
             free(path);
-            return SYLVANE_OK;
+            return SYLVANC_OK;
         }
 
         free(full_path);
@@ -61,7 +64,7 @@ sylvan_code_t sylvan_find_in_PATH(const char *command, char **filepath) {
     }
 
     free(path);
-    return sylvan_set_errno(SYLVANE_NOEXEC);
+    return sylvan_set_code(SYLVANC_FILE_NOT_FOUND);
 }
 
 /**
@@ -69,18 +72,21 @@ sylvan_code_t sylvan_find_in_PATH(const char *command, char **filepath) {
  */
 sylvan_code_t sylvan_canonical_path(const char *filepath, char **canonical_path) {
     assert(filepath != NULL);
+
     char *path;
     sylvan_code_t code = sylvan_real_path(filepath, &path);
-    if (code == SYLVANE_OK) {
+    if (!code) {
         *canonical_path = path;
-        return SYLVANE_OK;
+        return SYLVANC_OK;
     }
-    if (code != SYLVANE_NOFILE)
+
+    if (code != SYLVANC_FILE_NOT_FOUND)
         return  sylvan_set_errno(code);
     if ((code = sylvan_find_in_PATH(filepath, &path)))
         return code;
+
     *canonical_path = path;
-    return SYLVANE_OK;
+    return SYLVANC_OK;
 }
 
 /**

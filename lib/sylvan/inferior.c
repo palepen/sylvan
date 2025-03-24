@@ -21,301 +21,582 @@ static int sylvan_inferior_count = 0;
 
 
 /**
- * @brief creates an inferior
+ * checks for a change in the state of the process and updates the inferior state
  */
-sylvan_code_t sylvan_inferior_create(struct sylvan_inferior **inf) {
-    *inf = (malloc(sizeof(struct sylvan_inferior)));
-    if (*inf == NULL)
-        return sylvan_set_code(SYLVANE_OUT_OF_MEMORY);
-    memset(*inf, 0, sizeof(struct sylvan_inferior));
-    (*inf)->id = sylvan_inferior_idx++;
-    sylvan_inferior_count++;
-    return SYLVANE_OK;
-}
+static sylvan_code_t sylvan_update_inf_status(struct sylvan_inferior *inf) {
 
-/**
- * @brief detaches from a process
- */
-sylvan_code_t sylvan_detach(struct sylvan_inferior *inf) {
-    if (inf == NULL)
-        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    if (!inf->is_attached)
-        return sylvan_set_code(SYLVANE_PROC_NOT_ATTACHED);
-    if (ptrace(PTRACE_DETACH, inf->pid, NULL, NULL) < 0)
-        return sylvan_set_errno_msg(SYLVANE_PTRACE_DETACH, "ptrace detach");
-    inf->is_attached = false;
-    inf->pid = -1;
-    inf->status = SYLVAN_INFSTATE_NONE;
-    return SYLVANE_OK;
-}
+    assert(inf != NULL); /* inf should not be NULL in an internal library function */
 
-/**
- * @brief kills a process
- */
-sylvan_code_t sylvan_kill(struct sylvan_inferior *inf) {
-    if (inf == NULL)
-        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    if (inf->status != SYLVAN_INFSTATE_RUNNING && inf->status != SYLVAN_INFSTATE_STOPPED)
-        return SYLVANE_OK;
-    if (kill(inf->pid, SIGKILL) && errno != ESRCH)
-        return sylvan_set_errno_msg(SYLVANE_PROC_KILL, "kill");
-    inf->is_attached = false;
-    inf->pid = -1;
-    inf->status = SYLVAN_INFSTATE_NONE;
-    return SYLVANE_OK;
-}
+    if (inf->pid <= 0)
+        return sylvan_set_code(SYLVANC_PROC_NOT_FOUND);
 
-/**
- * function to reset the status of the inf in between process changes
- * detaches or kills the process depending on inf->is_attached
- * only fields related to process are reset. args for eg, is not reset
- */
-static sylvan_code_t reset_inferior_state(struct sylvan_inferior *inf) {
-    if (inf == NULL)
-        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    sylvan_code_t code = SYLVANE_OK;
-    if (inf->status == SYLVAN_INFSTATE_RUNNING || inf->status == SYLVAN_INFSTATE_STOPPED) {
-        if (inf->is_attached) {
-            if ((code = sylvan_detach(inf)))
-                return code;
-        } else {
-            if ((code = sylvan_kill(inf)))
-                return code;
-        }
-    }
-    return code;
-}
+    int result, status;
+    do {
+        result = waitpid(inf->pid, &status, WNOHANG);
+    } while (result == -1 && errno == EINTR);
 
-/**
- * @brief attaches to a process given its pid
- */
-sylvan_code_t sylvan_attach_pid(struct sylvan_inferior *inf, pid_t pid) {
-    if (inf == NULL)
-        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    sylvan_code_t code = SYLVANE_OK;
-    if ((code = reset_inferior_state(inf)))
-        return code;
-    if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) < 0)
-        return sylvan_set_errno_msg(SYLVANE_PTRACE_ATTACH, "ptrace attach");
-    int status;
-    if (waitpid(pid, &status, 0) < 0)
-        return sylvan_set_errno_msg(SYLVANE_PROC_ATTACH, "waitpid");
-    if (!WIFSTOPPED(status))
-        return sylvan_set_message(SYLVANE_PROC_ATTACH, "The process did not stop");
-    inf->pid = pid;
-    inf->status = SYLVAN_INFSTATE_STOPPED;
-    free(inf->realpath);
-    // MAYBE: warn that real path wasn't available
-    if ((code = sylvan_real_path_pid(inf->pid, &inf->realpath)))
-        inf->realpath = NULL;
-    inf->is_attached = true;
-    return code;
-}
+    if (!result)   /* no change in state */
+        return SYLVANC_OK;
 
-/**
- * @brief deletes an inferior
- */
-sylvan_code_t sylvan_inferior_destroy(struct sylvan_inferior *inf) {
-    if (inf == NULL)
-        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    sylvan_code_t code;
-    if ((code = reset_inferior_state(inf)))
-        return code;
-    free(inf->realpath);
-    free(inf->args);
-    free(inf);
-    sylvan_inferior_count--;
-    return SYLVANE_OK;
-}
+    if (result == -1) {
+        if (errno != ECHILD)
+            return sylvan_set_errno_msg(SYLVANC_WAITPID_FAILED, "waitpid");
 
-static void handle_child(struct sylvan_inferior *inf) {
-    
-    // TODO: send the errno to parent + terminal handling
-    if (ptrace(PTRACE_TRACEME, 0, NULL, NULL) < 0)
-        _exit(EXIT_FAILURE);
+        if (kill(inf->pid, 0) != -1)
+            return sylvan_set_message(SYLVANC_PROC_NOT_ATTACHED, "Process %d exists but is not being traced", inf->pid);
 
-    assert(inf->realpath != NULL);
+        if (errno != ESRCH)
+            return sylvan_set_errno_msg(SYLVANC_SYSTEM_ERROR, "Can't check process status");
 
-    size_t args_len = inf->args == NULL ? 0 : strlen(inf->args);
-    size_t path_len = strlen(inf->realpath);
-
-    char *args = malloc(path_len + 1 + (args_len ? args_len + 1 : 0)); // path + '\0' or path + ' ' + args + '\0'
-    memcpy(args, inf->realpath, path_len);
-
-    char **argv = (char*[]){ args, NULL }; // https://gcc.gnu.org/onlinedocs/gcc/Compound-Literals.html
-
-    if (inf->args != NULL) {
-        args[path_len] = ' ';
-        memcpy(args + path_len + 1, inf->args, args_len + 1); // args + '\0'
-        wordexp_t p;
-        if (wordexp(args, &p, 0))
-            _exit(EXIT_FAILURE);
-        argv = p.we_wordv;
+        inf->status = SYLVAN_INFSTATE_NONE;
+        inf->pid = 0;
+        inf->is_attached = false;
+        return sylvan_set_message(SYLVANC_PROC_NOT_FOUND, "Process %d doesn't exist", inf->pid);
     }
 
-    execvp(inf->realpath, argv);
-    
-    _exit(EXIT_FAILURE);
-}
-
-static sylvan_code_t handle_parent(pid_t pid, struct sylvan_inferior *inf) {
-    inf->pid = pid;
-    inf->status = SYLVAN_INFSTATE_RUNNING;
-    int status;
-
-    if (waitpid(pid, &status, 0) < 0)
-        return sylvan_set_errno_msg(SYLVANE_PROC_WAIT, "waitpid");
-
-    if (WIFEXITED(status))
-        inf->status = SYLVAN_INFSTATE_EXITED;   // _exit()
-    else
-    if (WIFSTOPPED(status))                     // kill -TERM and -STOP
+    /* there's a status change */
+    if (WIFEXITED(status)) {
+        inf->status = SYLVAN_INFSTATE_EXITED;
+        return sylvan_set_message(SYLVANC_PROC_EXITED, "Process %d exited with code %d", inf->pid, WEXITSTATUS(status));
+    }
+    if (WIFSIGNALED(status)) {
+        inf->status = SYLVAN_INFSTATE_TERMINATED;
+        return sylvan_set_message(SYLVANC_PROC_TERMINATED, "Process %d terminated by signal %d", inf->pid, WTERMSIG(status));
+    }
+    if (WIFSTOPPED(status))
         inf->status = SYLVAN_INFSTATE_STOPPED;
     else
-    if (WIFSIGNALED(status))                    // kill -KILL
-        inf->status = SYLVAN_INFSTATE_TERMINATED;
+    if (WIFCONTINUED(status))
+        inf->status = SYLVAN_INFSTATE_RUNNING;
+    else
+        assert(0); /* this shouldn't happen */
 
-    return SYLVANE_OK;
-}
+    return SYLVANC_OK;
 
-sylvan_code_t sylvan_run(struct sylvan_inferior *inf) {
-    if (inf == NULL)
-        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    if (inf->realpath == NULL)
-        return sylvan_set_code(SYLVANE_NOEXEC);
-    sylvan_code_t code = SYLVANE_OK;
-    if ((code = sylvan_kill(inf)))
-        return code;
-    pid_t pid = fork();
-    if (pid < 0)
-        return sylvan_set_errno_msg(SYLVANE_PROC_FORK, "fork");
-    if (pid == 0)
-        handle_child(inf); // this won't return
-    return handle_parent(pid, inf);
 }
 
 /**
- * @param filepath path to the executable; can't be null
+ * updates inferior status based on wait status
  */
-sylvan_code_t sylvan_set_filepath(struct sylvan_inferior *inf, const char *filepath) {
-    if (inf == NULL)
-        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    if (filepath == NULL)  {
-        free(inf->realpath);
-        return SYLVANE_OK;
-    }
-    char *newpath;
-    sylvan_code_t code;
-    if ((code = sylvan_canonical_path(filepath, &newpath)))
-        return code;
-    free(inf->realpath);
-    inf->realpath = newpath;
-    return SYLVANE_OK;
-}
+static void sylvan_update_wait_status(int status, struct sylvan_inferior *inf) {
 
-/**
- * @param args arguments given to the executable; set it to null to remove any
- */
-sylvan_code_t sylvan_set_args(struct sylvan_inferior *inf, const char *args) {
-    if (inf == NULL)
-        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    if (args == NULL) {
-        free(inf->args);
-        inf->args = NULL;
-        return SYLVANE_OK;
-    }
-    char *newargs = strdup(args);
-    if (newargs == NULL)
-        return sylvan_set_code(SYLVANE_OUT_OF_MEMORY);
-    free(inf->args);
-    inf->args = newargs;
-    return SYLVANE_OK;
-}
+    assert(inf != NULL); /* inf should not be NULL in an internal library function */
 
-static sylvan_code_t check_inf_stop(struct sylvan_inferior *inf) {
-    switch (inf->status) {
-        case SYLVAN_INFSTATE_NONE:
-            return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program isn't running");
-        case SYLVAN_INFSTATE_EXITED:
-            return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program has already exited");
-        case SYLVAN_INFSTATE_TERMINATED:
-            return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program has been terminated");
-        case SYLVAN_INFSTATE_RUNNING:
-            return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program is already running");
-        default:
-            return SYLVANE_OK;
-    }
-}
-
-static void ptrace_error(struct sylvan_inferior *inf) {
-    switch (errno) {
-        case ESRCH:
-            inf->is_attached = false;
-            inf->status = SYLVAN_INFSTATE_EXITED;
-            break;
-    }
-}
-
-sylvan_code_t sylvan_continue(struct sylvan_inferior *inf) {
-    if (inf == NULL)
-        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    sylvan_code_t code = check_inf_stop(inf);
-    if (code)
-        return code;
-    if (ptrace(PTRACE_CONT, inf->pid, NULL, NULL) < 0) {
-        ptrace_error(inf);
-        return sylvan_set_errno_msg(SYLVANE_PTRACE_CONT, "ptrace cont");
-    }
-    inf->status = SYLVAN_INFSTATE_RUNNING;
-    int status;
-    pid_t result = waitpid(inf->pid, &status, 0);
-    if (result < 0)
-        return sylvan_set_errno_msg(SYLVANE_PROC_WAIT, "waitpid");
-
+    if (WIFSTOPPED(status))
+        inf->status = SYLVAN_INFSTATE_STOPPED;
+    else
     if (WIFEXITED(status))
         inf->status = SYLVAN_INFSTATE_EXITED;
     else
     if (WIFSIGNALED(status))
         inf->status = SYLVAN_INFSTATE_TERMINATED;
     else
+    if (WIFCONTINUED(status))
+        inf->status = SYLVAN_INFSTATE_RUNNING;
+    else
+        assert(0); /* this shouldn't happen */
+}
+
+/**
+ * kills the associated process
+*/
+static sylvan_code_t sylvan_kill(struct sylvan_inferior *inf) {
+    if (inf == NULL)
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+    
+    if (inf->status != SYLVAN_INFSTATE_RUNNING && inf->status != SYLVAN_INFSTATE_STOPPED)
+        return SYLVANC_OK;
+
+    if (kill(inf->pid, SIGKILL) < 0) {
+        if (errno != ESRCH)
+            return sylvan_set_errno_msg(SYLVANC_KILL_FAILED, "kill");
+        inf->is_attached = false;
+        inf->pid = 0;
+        inf->status = SYLVAN_INFSTATE_NONE;
+        return SYLVANC_OK;
+    }
+    
+    int status;
+    int result;
+    do {
+        result = waitpid(inf->pid, &status, 0);
+    } while (result == -1 && errno == EINTR);
+    
+    if (result == -1)
+        return sylvan_set_errno_msg(SYLVANC_WAITPID_FAILED, "waitpid");
+
+    inf->is_attached = false;
+    inf->pid = 0;
+    inf->status = SYLVAN_INFSTATE_NONE;
+    
+    return SYLVANC_OK;
+}
+
+/**
+ * kills or detaches depending on inf->is_attached
+ */
+static sylvan_code_t sylvan_terminate_or_detach(struct sylvan_inferior *inf) {
+    
+    assert(inf != NULL); /* inf should not be NULL in an internal library function */
+
+    if (inf->status != SYLVAN_INFSTATE_RUNNING && inf->status != SYLVAN_INFSTATE_STOPPED)
+        return SYLVANC_OK;
+
+    sylvan_code_t code;
+
+    if (!inf->is_attached)
+        code = sylvan_kill(inf);
+    else
+        code = sylvan_detach(inf);
+    
+    if (code == SYLVANC_OK || code == SYLVANC_PROC_NOT_FOUND || code == SYLVANC_PROC_EXITED || code == SYLVANC_PROC_TERMINATED)
+        return SYLVANC_OK;
+
+    return code;
+
+}
+
+
+/**
+ * creates an inferior
+ */
+sylvan_code_t sylvan_inferior_create(struct sylvan_inferior **infp) {
+    if (infp == NULL)
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+
+    *infp = malloc(sizeof(struct sylvan_inferior));
+    if (*infp == NULL)
+        return sylvan_set_code(SYLVANC_OUT_OF_MEMORY);
+
+    memset(*infp, 0, sizeof(struct sylvan_inferior));
+    (*infp)->id = sylvan_inferior_idx++;
+    sylvan_inferior_count++;
+
+    return SYLVANC_OK;
+}
+
+/**
+ * kills or detaches associated process and deletes the inferior
+ */
+sylvan_code_t sylvan_inferior_destroy(struct sylvan_inferior *inf) {
+    if (inf == NULL)
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+
+    sylvan_code_t code;
+    if ((code = sylvan_terminate_or_detach(inf)))
+        return code;
+
+    free(inf->realpath);
+    free(inf->args);
+    free(inf);
+
+    sylvan_inferior_count--;
+
+    return SYLVANC_OK;
+}
+
+
+/**
+ * attaches to a process
+ */
+sylvan_code_t sylvan_attach(struct sylvan_inferior *inf, pid_t pid) {
+    if (inf == NULL)
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+
+    if (kill(pid, 0) == -1) {
+        if (errno == ESRCH)
+            return sylvan_set_message(SYLVANC_PROC_NOT_FOUND, "Process %d does not exist", pid);
+        return sylvan_set_errno_msg(SYLVANC_SYSTEM_ERROR, "Check process existence");
+    }
+
+    sylvan_code_t code;
+    if ((code = sylvan_terminate_or_detach(inf)))
+        return code;
+    
+    if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) < 0) {
+        if (errno == EPERM)
+            return sylvan_set_message(SYLVANC_PTRACE_ATTACH_FAILED, "Permission denied to attach to process %d", pid);
+        if (errno == ESRCH)
+            return sylvan_set_message(SYLVANC_PROC_NOT_FOUND, "Process %d does not exist", pid);
+        return sylvan_set_errno_msg(SYLVANC_PTRACE_ATTACH_FAILED, "ptrace attach");
+    }
+    
+    char *path = NULL;
+    sylvan_real_path_pid(pid, &path); /* don't care if it fails */
+    
+    int status;
+    int result;
+    do {
+        result = waitpid(pid, &status, 0);
+    } while (result == -1 && errno == EINTR);
+    
+    if (result == -1) {
+        free(path);
+        if (errno == ECHILD)
+            return sylvan_set_message(SYLVANC_PROC_NOT_FOUND, "Process %d disappeared during attach", pid);
+        return sylvan_set_errno_msg(SYLVANC_WAITPID_FAILED, "waitpid");
+    }
+
     if (WIFSTOPPED(status))
         inf->status = SYLVAN_INFSTATE_STOPPED;
-    return SYLVANE_OK;
+    else
+    if (WIFCONTINUED(status))
+        inf->status = SYLVAN_INFSTATE_RUNNING;
+    else {
+        free(path);
+        if (WIFEXITED(status))
+            return sylvan_set_message(SYLVANC_PROC_EXITED, "Process %d exited during attach", pid);
+        if (WIFSIGNALED(status))
+            return sylvan_set_message(SYLVANC_PROC_TERMINATED, "Process %d terminated during attach", pid);
+        assert(0); /* this shouldn't happen */
+    }
+
+    free(inf->realpath);
+    inf->pid = pid;
+    inf->is_attached = true;
+    inf->realpath = path;
+
+    return SYLVANC_OK;
 }
 
-sylvan_code_t sylvan_stepinst(struct sylvan_inferior *inf) {
+/**
+ * detaches from the associated process if inf->is_attached is true
+ */
+sylvan_code_t sylvan_detach(struct sylvan_inferior *inf) {
     if (inf == NULL)
-        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
-    sylvan_code_t code = check_inf_stop(inf);
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+
+    if (!inf->is_attached)
+        return sylvan_set_message(SYLVANC_PROC_NOT_ATTACHED, "Process is not being traced");
+
+    sylvan_code_t code = sylvan_update_inf_status(inf);
+    if (code == SYLVANC_PROC_EXITED || code == SYLVANC_PROC_TERMINATED)
+        return SYLVANC_OK;
+
     if (code)
         return code;
-    if (ptrace(PTRACE_SINGLESTEP, inf->pid, NULL, NULL) < 0) {
-        ptrace_error(inf);
-        return sylvan_set_errno_msg(SYLVANE_PTRACE_SSTEP, "ptrace single step");
-    }
-    return SYLVANE_OK;
+
+    if (ptrace(PTRACE_DETACH, inf->pid, NULL, NULL) < 0)
+        if (errno != ESRCH)
+            return sylvan_set_errno_msg(SYLVANC_PTRACE_DETACH_FAILED, "ptrace detach");
+
+    inf->is_attached = false;
+    inf->pid = 0;
+    inf->status = SYLVAN_INFSTATE_NONE;
+
+    return SYLVANC_OK;
 }
 
+
+/**
+ * sends code and errno to parent and exits
+ */
+static void exit_child(int wd, sylvan_code_t code) {
+    if (dprintf(wd, "%d %d", code, errno) < 0)
+        _exit(1);
+    if (close(wd) < 0)
+        _exit(1);
+    _exit(0);
+}
+
+/**
+ * well, handles child process
+ */
+static void handle_child(struct sylvan_inferior *inf, int fd[2]) {
+
+    if (close(fd[0]) < 0)
+        _exit(1);
+
+    int wd = fd[1];
+
+    if (ptrace(PTRACE_TRACEME, 0, NULL, NULL) < 0)
+        exit_child(wd, SYLVANC_PTRACE_ERROR);
+
+    size_t args_len = inf->args == NULL ? 0 : strlen(inf->args);
+    size_t path_len = strlen(inf->realpath);
+
+    char *args = malloc(path_len + 1 + (args_len ? args_len + 1 : 0));
+    if (args == NULL) {
+        errno = ENOMEM;
+        exit_child(wd, SYLVANC_OUT_OF_MEMORY);
+    }
+
+    memcpy(args, inf->realpath, path_len);
+
+    char **argv = (char*[]){ args, NULL };
+
+    if (inf->args != NULL) {
+        args[path_len] = ' ';
+        memcpy(args + path_len + 1, inf->args, args_len + 1);
+
+        wordexp_t p;
+        int res;
+        if ((res = wordexp(args, &p, WRDE_NOCMD))) {
+            if (res == WRDE_NOSPACE)
+                exit_child(wd, SYLVANC_OUT_OF_MEMORY);
+            else
+                exit_child(wd, SYLVANC_INVALID_ARGUMENT);
+        }
+        argv = p.we_wordv;
+    }
+
+    if (close(wd) < 0)
+        _exit(1);
+
+    execvp(inf->realpath, argv);
+
+    _exit(1);
+}
+
+/**
+ * handles parent process
+ */
+static sylvan_code_t handle_parent(pid_t pid, struct sylvan_inferior *inf, int fd[2]) {
+
+    if (close(fd[1]) < 0)
+        return sylvan_set_errno_msg(SYLVANC_SYSTEM_ERROR, "close pipe");
+
+    int rd = fd[0];
+
+    char buf[128];
+    ssize_t bytes_read;
+    do {
+        bytes_read = read(rd, buf, sizeof(buf));
+    } while (bytes_read == -1 && errno == EINTR);
+
+    if (close(rd) < 0)
+        return sylvan_set_errno_msg(SYLVANC_SYSTEM_ERROR, "close pipe");
+
+    if (bytes_read < 0)
+        return sylvan_set_errno_msg(SYLVANC_SYSTEM_ERROR, "read from pipe");
+
+    if (bytes_read > 0) {
+        int code;
+        int child_errno;
+        if (sscanf(buf, "%d %d", &code, &child_errno) != 2)
+            return sylvan_set_message(SYLVANC_SYSTEM_ERROR, "parse child error message");
+
+        switch ((errno = child_errno)) {
+            case SYLVANC_PTRACE_ERROR:      return sylvan_set_errno_msg(SYLVANC_PTRACE_ERROR, "ptrace in child");
+            case SYLVANC_OUT_OF_MEMORY:     return sylvan_set_code(SYLVANC_OUT_OF_MEMORY);
+            case SYLVANC_INVALID_ARGUMENT:  return sylvan_set_message(SYLVANC_INVALID_ARGUMENT, "Invalid arguments for child process");
+            case SYLVANC_FILE_NOT_FOUND:    return sylvan_set_message(SYLVANC_FILE_NOT_FOUND, "Executable file not found");
+            return sylvan_set_code(code);
+        }
+        return sylvan_set_code(code);
+    }
+
+    int status;
+    int res;
+    do {
+        res = waitpid(pid, &status, 0);
+    } while (res == -1 && errno == EINTR);
+
+    if (res == -1)
+        return sylvan_set_errno_msg(SYLVANC_WAITPID_FAILED, "waitpid");
+
+    if (WIFEXITED(status))
+        return sylvan_set_message(SYLVANC_PROC_CHILD, "Child process exited with code %d", WEXITSTATUS(status));
+
+    sylvan_update_wait_status(status, inf);
+    inf->pid = pid;
+    inf->is_attached = false;
+
+    return sylvan_continue(inf);
+}
+
+/**
+ * runs a new process. replaces existing process
+ */
+sylvan_code_t sylvan_run(struct sylvan_inferior *inf) {
+    if (inf == NULL)
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+
+    if (inf->realpath == NULL)
+        return sylvan_set_message(SYLVANC_FILE_NOT_FOUND, "No executable path specified");
+
+    if (access(inf->realpath, X_OK))
+        return sylvan_set_errno_msg(SYLVANC_NOT_EXECUTABLE, "File '%s' is not executable", inf->realpath);
+
+    sylvan_code_t code;
+    if ((code = sylvan_kill(inf)))
+        return code;
+
+    int fd[2];
+    if (pipe(fd) < 0)
+        return sylvan_set_errno_msg(SYLVANC_PIPE_FAILED, "pipe");
+    
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(fd[0]);
+        close(fd[1]);
+        return sylvan_set_errno_msg(SYLVANC_FORK_FAILED, "fork");
+    }
+
+    if (pid == 0)
+        handle_child(inf, fd); // never returns
+
+    return handle_parent(pid, inf, fd);
+}
+
+/**
+ * continues the stopped process
+ */
+sylvan_code_t sylvan_continue(struct sylvan_inferior *inf) {
+    if (inf == NULL)
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+    
+    sylvan_code_t code;
+    if ((code = sylvan_update_inf_status(inf)))
+        return code;
+    
+    if (inf->status != SYLVAN_INFSTATE_STOPPED) {
+        if (inf->status == SYLVAN_INFSTATE_RUNNING)
+            return sylvan_set_message(SYLVANC_PROC_RUNNING, "Process %d is already running", inf->pid);
+        return sylvan_set_message(SYLVANC_INVALID_STATE, "Process %d is not in a stopped state", inf->pid);
+    }
+
+    if (ptrace(PTRACE_CONT, inf->pid, NULL, NULL) < 0)
+        return sylvan_set_errno_msg(SYLVANC_PTRACE_CONT_FAILED, "ptrace cont");
+    
+    int status;
+    int res;
+    do {
+        res = waitpid(inf->pid, &status, 0);
+    } while (res == -1 && errno == EINTR);
+    
+    if (res == -1)
+        return sylvan_set_errno_msg(SYLVANC_WAITPID_FAILED, "waitpid");
+    
+    sylvan_update_wait_status(status, inf);
+    
+    return SYLVANC_OK;
+}
+
+/**
+ * steps through a single instruction
+ */
+sylvan_code_t sylvan_stepinst(struct sylvan_inferior *inf) {
+    if (inf == NULL)
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+        
+    sylvan_code_t code;
+    if ((code = sylvan_update_inf_status(inf)))
+        return code;
+        
+    if (inf->status != SYLVAN_INFSTATE_STOPPED)
+        return sylvan_set_message(SYLVANC_INVALID_STATE, "Process must be stopped to single-step");
+
+    if (ptrace(PTRACE_SINGLESTEP, inf->pid, NULL, NULL) < 0)
+        return sylvan_set_errno_msg(SYLVANC_PTRACE_STEP_FAILED, "ptrace single step");
+    
+    int status;
+    int res;
+    do {
+        res = waitpid(inf->pid, &status, 0);
+    } while (res == -1 && errno == EINTR);
+    
+    if (res == -1)
+        return sylvan_set_errno_msg(SYLVANC_WAITPID_FAILED, "waitpid");
+    
+    sylvan_update_wait_status(status, inf);
+    
+    return SYLVANC_OK;
+}
+
+
+/**
+ * gets cpu regs
+ */
 sylvan_code_t sylvan_get_regs(struct sylvan_inferior *inf, struct user_regs_struct *regs) {
     if (inf == NULL || regs == NULL)
-        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+    
+    sylvan_code_t code = sylvan_update_inf_status(inf);
+    if ((code = sylvan_update_inf_status(inf)))
+        return code;
+
     if (inf->status != SYLVAN_INFSTATE_STOPPED && inf->status != SYLVAN_INFSTATE_RUNNING)
-        return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program isn't running");
-    if (ptrace(PTRACE_GETREGS, inf->pid, NULL, regs) < 0) {
-        ptrace_error(inf);
-        return  sylvan_set_errno_msg(SYLVANE_PTRACE_GETREGS, "ptrace get regs");
-    }
-    return SYLVANE_OK;
+        return sylvan_set_message(SYLVANC_INVALID_STATE, "Cannot get registers: process is not running or stopped");
+
+    if (ptrace(PTRACE_GETREGS, inf->pid, NULL, regs) < 0)
+        return sylvan_set_errno_msg(SYLVANC_PTRACE_GETREGS_FAILED, "ptrace get regs");
+    
+    return SYLVANC_OK;
 }
 
+/**
+ * sets cpu regs
+ */
 sylvan_code_t sylvan_set_regs(struct sylvan_inferior *inf, const struct user_regs_struct *regs) {
     if (inf == NULL || regs == NULL)
-        return sylvan_set_code(SYLVANE_INVALID_ARGUMENT);
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+    
+    sylvan_code_t code = sylvan_update_inf_status(inf);
+    if (code != SYLVANC_OK)
+        return code;
+    
     if (inf->status != SYLVAN_INFSTATE_STOPPED && inf->status != SYLVAN_INFSTATE_RUNNING)
-        return sylvan_set_message(SYLVANE_INF_INVALID_STATE, "Program isn't running");
-    if (ptrace(PTRACE_SETREGS, inf->pid, NULL, regs) < 0) {
-        ptrace_error(inf);
-        return  sylvan_set_errno_msg(SYLVANE_PTRACE_SETREGS, "ptrace set regs");
+        return sylvan_set_message(SYLVANC_INVALID_STATE,  "Cannot set registers: process is not running or stopped");
+    
+    if (ptrace(PTRACE_SETREGS, inf->pid, NULL, regs) < 0)
+        return sylvan_set_errno_msg(SYLVANC_PTRACE_SETREGS_FAILED, "ptrace set regs");
+    
+    return SYLVANC_OK;
+}
+
+
+/**
+ * set executable path for the inferior
+ */
+sylvan_code_t sylvan_set_filepath(struct sylvan_inferior *inf, const char *filepath) {
+    if (inf == NULL)
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+    
+    if (filepath == NULL) {
+        free(inf->realpath);
+        inf->realpath = NULL;
+        return SYLVANC_OK;
     }
-    return SYLVANE_OK;
+    
+    char *newpath;
+    sylvan_code_t code;
+    if ((code = sylvan_canonical_path(filepath, &newpath)) != SYLVANC_OK)
+        return code;
+    
+    if (access(newpath, X_OK) != 0) {
+        free(newpath);
+        int len = strlen(filepath);
+        if (len <= 256)
+            return sylvan_set_errno_msg(SYLVANC_NOT_EXECUTABLE, "File '%s' is not executable", filepath);
+        return sylvan_set_errno_msg(SYLVANC_NOT_EXECUTABLE, "File '%.256s...' is not executable", filepath);
+    }
+
+    free(inf->realpath);
+    inf->realpath = newpath;
+
+    return SYLVANC_OK;
+}
+
+/**
+ * sets the args. unsets them if NULL is passed
+ */
+sylvan_code_t sylvan_set_args(struct sylvan_inferior *inf, const char *args) {
+    if (inf == NULL)
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+
+    if (args == NULL) {
+        free(inf->args);
+        inf->args = NULL;
+        return SYLVANC_OK;
+    }
+
+    char *newargs = strdup(args);
+    if (newargs == NULL)
+        return sylvan_set_code(SYLVANC_OUT_OF_MEMORY);
+    
+    free(inf->args);
+    inf->args = newargs;
+    
+    return SYLVANC_OK;
 }
