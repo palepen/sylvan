@@ -30,6 +30,6 @@ struct command_history
     struct command_history* next;
 };
 
-extern void interface_loop(struct sylvan_inferior *inf);
+extern void interface_loop(struct sylvan_inferior **inf);
 
 #endif

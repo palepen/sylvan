@@ -10,7 +10,7 @@ enum sylvan_command_type
 };
 
 /** @brief Function pointer type for command handlers */
-typedef int (*command_handler_t)(char **command, struct sylvan_inferior *inf);
+typedef int (*command_handler_t)(char **command, struct sylvan_inferior **inf);
 
 /** @brief Structure for command data with handler, function name, and hash */
 struct sylvan_command_data
@@ -38,6 +38,6 @@ struct debug_target {
 
 extern struct sylvan_command_data sylvan_commands[];
 extern struct sylvan_command_data sylvan_info_commands[];
-extern int handle_command(char **command, struct sylvan_inferior *inf);
+extern int handle_command(char **command, struct sylvan_inferior **inf);
 extern int init_commands();
 #endif

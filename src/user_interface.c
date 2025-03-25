@@ -300,15 +300,8 @@ static int add_history(char **command)
  * @details Provides a command-line interface for debugger operations
  * @param[in,out] proc Pointer to the debug process structure
  */
-extern void interface_loop(struct sylvan_inferior *inf)
+extern void interface_loop(struct sylvan_inferior **inf)
 {
-
-    if (!inf)
-    {
-        fprintf(stderr, "Error: Invalid process structure\n");
-        return;
-    }
-
     print_heading();
     init_commands();
 
@@ -336,7 +329,7 @@ extern void interface_loop(struct sylvan_inferior *inf)
             free_command(line);
             break;
         }
-
+        
         free_command(line);
     }
 

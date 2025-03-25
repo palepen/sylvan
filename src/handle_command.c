@@ -181,7 +181,7 @@ static struct sylvan_command_data *lookup_command(const char *command_name)
  * @param[in] command Command provided by the user
  * @param[in] inf The sylvan_inferior being debugged
  */
-int handle_command(char **command, struct sylvan_inferior *inf)
+int handle_command(char **command, struct sylvan_inferior **inf)
 {
     if (!command || !command[0])
     {
@@ -240,8 +240,7 @@ int handle_command(char **command, struct sylvan_inferior *inf)
                 }
                 else
                 {
-                    printf("Info command recognized but not implemented: %s %s\n",
-                           command[0], command[1]);
+                    printf("Info command recognized but not implemented: %s %s\n", command[0], command[1]);
                     return 0;
                 }
             }

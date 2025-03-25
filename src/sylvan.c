@@ -9,8 +9,8 @@
 #include "cmd.h"
 #include "user_interface.h"
 
-
-void cmd_args_init(struct cmd_args *args) {
+void cmd_args_init(struct cmd_args *args)
+{
     struct cmd_args tmp = {
         .file_args = NULL,
         .filepath = NULL,
@@ -20,7 +20,8 @@ void cmd_args_init(struct cmd_args *args) {
     *args = tmp;
 }
 
-void print_help() {
+void print_help()
+{
     printf("Usage: sylvan [options]\n");
     printf("  -h, --help                Show this help message\n");
     printf("  -v, --version             Show version information\n");
@@ -28,56 +29,62 @@ void print_help() {
     printf("  -p, --attach <pid>        Attach to a process with process id <pid>\n");
 }
 
-void print_version() {
+void print_version()
+{
     printf("Version 0.1.0\n");
 }
 
-void print_invalid_opt() {
+void print_invalid_opt()
+{
     fprintf(stderr, "Use 'sylvan -h or --help' to print a list of options.\n");
 }
 
-
-void parse_args(int argc, char *argv[], struct cmd_args *cmd_args) {
+void parse_args(int argc, char *argv[], struct cmd_args *cmd_args)
+{
 
     struct option long_options[] = {
-        { "help",       no_argument,        NULL, 'h' },
-        { "version",    no_argument,        NULL, 'v' },
-        { "args",       required_argument,  NULL, 'a' },
-        { "attach",     required_argument,  NULL, 'p' },
-        { 0, 0, 0, 0 },
+        {"help", no_argument, NULL, 'h'},
+        {"version", no_argument, NULL, 'v'},
+        {"args", required_argument, NULL, 'a'},
+        {"attach", required_argument, NULL, 'p'},
+        {0, 0, 0, 0},
     };
 
     char opt;
 
-    while ((opt = getopt_long(argc, argv, "hva:p:", long_options, NULL)) != -1) {
-        switch (opt) {
+    while ((opt = getopt_long(argc, argv, "hva:p:", long_options, NULL)) != -1)
+    {
+        switch (opt)
+        {
 
-            case 'h':
-                print_help();
-                exit(EXIT_SUCCESS);
-            case 'v':
-                print_version();
-                exit(EXIT_SUCCESS);
+        case 'h':
+            print_help();
+            exit(EXIT_SUCCESS);
+        case 'v':
+            print_version();
+            exit(EXIT_SUCCESS);
 
-            case 'a':
-                cmd_args->file_args = optarg;
-                break;
-            case 'p': {
-                char *end;
-                pid_t pid = strtol(optarg, &end, 10);
-                if (*end != '\0') {
-                    fprintf(stderr, "Invalid process id: %s\n", optarg);
-                    exit(EXIT_FAILURE);
-                }
-                cmd_args->is_attached = true;
-                cmd_args->pid = pid;
-                break;
+        case 'a':
+            cmd_args->file_args = optarg;
+            break;
+        case 'p':
+        {
+            char *end;
+            pid_t pid = strtol(optarg, &end, 10);
+            if (*end != '\0')
+            {
+                fprintf(stderr, "Invalid process id: %s\n", optarg);
+                exit(EXIT_FAILURE);
             }
-            case '?':
-                print_invalid_opt();
-                exit(EXIT_FAILURE);
-            default:
-                exit(EXIT_FAILURE);
+            cmd_args->is_attached = true;
+            cmd_args->pid = pid;
+            break;
+        }
+        case '?':
+            print_invalid_opt();
+            exit(EXIT_FAILURE);
+        default:
+            exit(EXIT_FAILURE);
         }
     }
 
@@ -88,22 +95,24 @@ void parse_args(int argc, char *argv[], struct cmd_args *cmd_args) {
     if (optind < argc)
         cmd_args->filepath = argv[optind++];
 
-    if (optind < argc) {
+    if (optind < argc)
+    {
         fprintf(stderr, "Ignoring excess options: ");
         while (optind < argc)
             fprintf(stderr, "%s ", argv[optind++]);
         fprintf(stderr, "\n");
     }
-
 }
 
-void error(const char *msg) {
+void error(const char *msg)
+{
     fprintf(stderr, msg);
     fprintf(stderr, "\n");
     exit(EXIT_FAILURE);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 
     struct cmd_args cmd_args;
     cmd_args_init(&cmd_args);
@@ -113,21 +122,26 @@ int main(int argc, char *argv[]) {
     // temporary code
 
     struct sylvan_inferior *inf;
+    
     if (sylvan_inferior_create(&inf))
         error(sylvan_get_last_error());
 
     if (sylvan_set_args(inf, cmd_args.file_args))
         error(sylvan_get_last_error());
 
-    if (cmd_args.filepath) {
+    if (cmd_args.filepath)
+    {
         if (sylvan_set_filepath(inf, cmd_args.filepath))
             error(sylvan_get_last_error());
     }
 
-    if (cmd_args.is_attached) {
+    if (cmd_args.is_attached)
+    {
         if (sylvan_attach_pid(inf, cmd_args.pid))
             error(sylvan_get_last_error());
-    } else if (cmd_args.filepath) {
+    }
+    else if (cmd_args.filepath)
+    {
         if (sylvan_run(inf))
             error(sylvan_get_last_error());
     }
@@ -138,13 +152,12 @@ int main(int argc, char *argv[]) {
     // usleep(10000000);
     printf("continuing the process\n");
 
-    interface_loop(inf);
-    
+    interface_loop(&inf);
+
     // if (sylvan_continue(inf))
     //     error(sylvan_get_last_error());
 
     sylvan_inferior_destroy(inf);
 
     return EXIT_SUCCESS;
-
 }
