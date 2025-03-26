@@ -31,7 +31,11 @@ or
 ## TODO
 
 - ~~attach to a process~~
-- run a process
-- software breakpoints
-- hardware breakpoints
-- watch points
+- ~~run a process~~
+- ~~single step~~
+- ~~regs~~
+- breakpoints
+- step
+- software watchpoints
+- hardware watchpoints
+- get the errno of child if exec fails to set correct status and error (eg if a file isn't an executable, currently it says program has already exited when exec fails)

@@ -1,9 +1,10 @@
-#ifndef SYLVAN_INC_INFERIOR_H
-#define SYLVAN_INC_INFERIOR_H
+#ifndef SYLVAN_INCLUDE_SYLVAN_INFERIOR_H
+#define SYLVAN_INCLUDE_SYLVAN_INFERIOR_H
 
 #include <sylvan/error.h>
 #include <stdbool.h>
 #include <sys/types.h>
+#include <sys/user.h>
 
 typedef enum {
     SYLVAN_INFSTATE_NONE,
@@ -25,12 +26,17 @@ struct sylvan_inferior {
 sylvan_code_t sylvan_inferior_create(struct sylvan_inferior **inf);
 sylvan_code_t sylvan_inferior_destroy(struct sylvan_inferior *inf);
 
+sylvan_code_t sylvan_attach(struct sylvan_inferior *inf, pid_t pid);
 sylvan_code_t sylvan_detach(struct sylvan_inferior *inf);
-sylvan_code_t sylvan_kill(struct sylvan_inferior *inf);
-sylvan_code_t sylvan_attach_pid(struct sylvan_inferior *inf, pid_t pid);
+
 sylvan_code_t sylvan_run(struct sylvan_inferior *inf);
+sylvan_code_t sylvan_continue(struct sylvan_inferior *inf);
+sylvan_code_t sylvan_stepinst(struct sylvan_inferior *inf);
+
+sylvan_code_t sylvan_get_regs(struct sylvan_inferior *inf, struct user_regs_struct *regs);
+sylvan_code_t sylvan_set_regs(struct sylvan_inferior *inf, const struct user_regs_struct *regs);
+
 sylvan_code_t sylvan_set_filepath(struct sylvan_inferior *inf, const char *filepath);
 sylvan_code_t sylvan_set_args(struct sylvan_inferior *inf, const char *args);
-sylvan_code_t sylvan_continue(struct sylvan_inferior *inf);
 
-#endif /* SYLVAN_INFERIOR_H */
+#endif /* SYLVAN_INCLUDE_SYLVAN_INFERIOR_H */

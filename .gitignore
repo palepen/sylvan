@@ -4,6 +4,9 @@ build/*
 .vscode/*
 !.vscode/c_cpp_properties.json
 
+/*.asm
 /*.c
-/*.out
 /*.o
+/*.out
+/*.s
+/*.S

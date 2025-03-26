@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/user.h>
 #include <sylvan/inferior.h>
 #include "cmd.h"
 #include "user_interface.h"
@@ -108,7 +109,7 @@ void error(const char *msg)
 {
     fprintf(stderr, msg);
     fprintf(stderr, "\n");
-    exit(EXIT_FAILURE);
+    // exit(EXIT_FAILURE);
 }
 
 int main(int argc, char *argv[])
@@ -119,10 +120,10 @@ int main(int argc, char *argv[])
 
     parse_args(argc, argv, &cmd_args);
 
-    // temporary code
+    printf("running temporary program before the cli is ready\n");
 
     struct sylvan_inferior *inf;
-    
+
     if (sylvan_inferior_create(&inf))
         error(sylvan_get_last_error());
 
@@ -137,27 +138,23 @@ int main(int argc, char *argv[])
 
     if (cmd_args.is_attached)
     {
-        if (sylvan_attach_pid(inf, cmd_args.pid))
-            error(sylvan_get_last_error());
+        if (sylvan_attach(inf, cmd_args.pid))
+            if (cmd_args.is_attached)
+            {
+                if (sylvan_attach_pid(inf, cmd_args.pid))
+                    error(sylvan_get_last_error());
+            }
+            else if (inf->realpath)
+            {
+                printf("exec file: %s\n", inf->realpath);
+            }
+            else if (cmd_args.filepath)
+            {
+                if (sylvan_run(inf))
+                    error(sylvan_get_last_error());
+            }
     }
-    else if (cmd_args.filepath)
-    {
-        if (sylvan_run(inf))
-            error(sylvan_get_last_error());
-    }
-
-    int time = 10000000;
-
-    printf("waiting for %dms \n", time / 1000);
-    // usleep(10000000);
-    printf("continuing the process\n");
-
+    
     interface_loop(&inf);
-
-    // if (sylvan_continue(inf))
-    //     error(sylvan_get_last_error());
-
-    sylvan_inferior_destroy(inf);
-
     return EXIT_SUCCESS;
 }
