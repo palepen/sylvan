@@ -1,27 +1,14 @@
-==46719== Memcheck, a memory error detector
-==46719== Copyright (C) 2002-2024, and GNU GPL'd, by Julian Seward et al.
-==46719== Using Valgrind-3.24.0 and LibVEX; rerun with -h for copyright info
-==46719== Command: ./build/sylvan ca.out
-==46719== Parent PID: 46347
-==46719== 
-==46719== 
-==46719== HEAP SUMMARY:
-==46719==     in use at exit: 384 bytes in 1 blocks
-==46719==   total heap usage: 26 allocs, 25 frees, 7,406 bytes allocated
-==46719== 
-==46719== 384 bytes in 1 blocks are definitely lost in loss record 1 of 1
-==46719==    at 0x4849133: calloc (vg_replace_malloc.c:1675)
-==46719==    by 0x402D53: parse_auxv (in /home/sunless/projects/sylvan_b/sylvan/build/sylvan)
-==46719==    by 0x402A75: handle_info_auxv (in /home/sunless/projects/sylvan_b/sylvan/build/sylvan)
-==46719==    by 0x4026D0: handle_command (in /home/sunless/projects/sylvan_b/sylvan/build/sylvan)
-==46719==    by 0x40216B: interface_loop (in /home/sunless/projects/sylvan_b/sylvan/build/sylvan)
-==46719==    by 0x4018FE: main (in /home/sunless/projects/sylvan_b/sylvan/build/sylvan)
-==46719== 
-==46719== LEAK SUMMARY:
-==46719==    definitely lost: 384 bytes in 1 blocks
-==46719==    indirectly lost: 0 bytes in 0 blocks
-==46719==      possibly lost: 0 bytes in 0 blocks
-==46719==    still reachable: 0 bytes in 0 blocks
-==46719==         suppressed: 0 bytes in 0 blocks
-==46719== 
-==46719== ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
+==39300== Memcheck, a memory error detector
+==39300== Copyright (C) 2002-2024, and GNU GPL'd, by Julian Seward et al.
+==39300== Using Valgrind-3.24.0 and LibVEX; rerun with -h for copyright info
+==39300== Command: ./build/sylvan
+==39300== Parent PID: 7876
+==39300== 
+==39300== 
+==39300== HEAP SUMMARY:
+==39300==     in use at exit: 0 bytes in 0 blocks
+==39300==   total heap usage: 11 allocs, 11 frees, 2,364 bytes allocated
+==39300== 
+==39300== All heap blocks were freed -- no leaks are possible
+==39300== 
+==39300== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

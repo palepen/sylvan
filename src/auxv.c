@@ -29,6 +29,7 @@ static const struct auxv_name auxv_names[] = {
  */
 unsigned char *target_read_auxv(struct sylvan_inferior *inf, size_t *len)
 {
+
     // Construct the path to /proc/<pid>/auxv
     char path[32];
     if (snprintf(path, sizeof(path), "/proc/%d/auxv", inf->pid) >= (int)sizeof(path))

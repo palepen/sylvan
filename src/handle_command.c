@@ -7,7 +7,6 @@
 
 #include "handle_command.h"
 #include "sylvan/inferior.h"
-#include "utils.h"
 #include "command_handler.h"
 
 #define HASH_TABLE_SIZE 256

@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <limits.h>
 #include <string.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #include "user_interface.h"
 #include "handle_command.h"
@@ -12,90 +14,40 @@
 int history_count = 0;
 struct command_history *history;
 
-
-/**
- * @brief Reads a command from standard input and splits it into an array of arguments.
- * @param prompt The prompt message displayed before reading input (can be NULL).
- * @return A dynamically allocated NULL-terminated array of strings (command and arguments).
- *         Returns NULL on memory allocation failure.
- * @note The caller is responsible for freeing the returned array and its elements.
- */
 static char **get_command(const char *prompt)
 {
-    if (prompt)
-        printf("%s", prompt);
-
-    size_t bufsize = INITIAL_BUFFER_SIZE;
-    char *buffer = malloc(bufsize);
-    if (!buffer)
-    {
-        perror("Error: malloc failed");
+    // Read input using readline
+    char *input = readline(prompt);
+    if (!input) {  // EOF (Ctrl+D) or allocation failure
         return NULL;
     }
 
-    size_t pos = 0;
-    int c;
-
-    while (1)
-    {
-        c = getchar();
-        if (c == EOF || c == '\n')
-        {
-            buffer[pos] = '\0'; // Null-terminate input
-            break;
-        }
-
-        // Handle backspace (ASCII 127 or '\b')
-        if (c == 127 || c == '\b')
-        {
-            if (pos > 0)
-            {
-                pos--;
-                printf("\b \b"); // Move cursor back, clear character
-                fflush(stdout);
-            }
-            continue;
-        }
-
-        buffer[pos++] = c;
-
-        // Expand buffer if needed
-        if (pos >= bufsize - 1)
-        {
-            bufsize *= 2;
-            buffer = realloc(buffer, bufsize);
-            if (!buffer)
-            {
-                perror("Error: realloc failed");
-                return NULL;
-            }
-        }
+    // Add to readline's history (replaces custom add_history)
+    if (input[0] != '\0') {
+        add_history(input);
+        history_count++;
     }
 
     // Tokenize input into an array of strings
     size_t arg_count = 0, arg_size = INITIAL_ARG_COUNT;
     char **args = malloc(arg_size * sizeof(char *));
-    if (!args)
-    {
+    if (!args) {
         perror("Error: malloc failed");
-        free(buffer);
+        free(input);
         return NULL;
     }
 
-    char *token = strtok(buffer, " ");
-    while (token)
-    {
+    char *token = strtok(input, " ");
+    while (token) {
         args[arg_count++] = strdup(token);
 
         // Expand args array if needed
-        if (arg_count >= arg_size - 1)
-        {
+        if (arg_count >= arg_size - 1) {
             arg_size *= 2;
             args = realloc(args, arg_size * sizeof(char *));
-            if (!args)
-            {
+            if (!args) {
                 perror("Error: realloc failed");
-                free(buffer);
+                free(input);
                 return NULL;
             }
         }
@@ -103,42 +55,24 @@ static char **get_command(const char *prompt)
         token = strtok(NULL, " ");
     }
 
-    args[arg_count] = NULL; // NULL-terminate argument list
-    free(buffer);           // Free original input buffer
+    args[arg_count] = NULL; 
+    free(input);            
 
     return args;
 }
 
 /**
  * @brief Frees a dynamically allocated NULL-terminated array of strings.
- *
  * @param args The array of strings to be freed.
  */
 static void free_command(char **args)
 {
-    if (!args)
-        return;
+    if (!args) return;
 
-    for (size_t i = 0; args[i] != NULL; i++)
+    for (size_t i = 0; args[i] != NULL; i++) {
         free(args[i]);
-
-    free(args);
-}
-
-/**
- * @brief Frees all stored command history.
- */
-static void free_history()
-{
-    while (history != NULL)
-    {
-        struct command_history *curr = history;
-        history = history->next;
-        free_command(curr->command);
-        free(curr);
     }
-
-    history_count = 0;
+    free(args);
 }
 
 /**
@@ -219,81 +153,6 @@ static void print_heading(void)
     printf("╝%s\n\n", RESET);
 }
 
-/**
- * @brief Adds a command with arguments to the command history.
- *
- * @param command A NULL-terminated array of strings (command + arguments).
- * @return 0 on success, 1 on failure.
- */
-static int add_history(char **command)
-{
-    if (!command || !command[0])
-    {
-        fprintf(stderr, "Invalid command given\n");
-        return 1;
-    }
-
-    // Count arguments
-    int arg_count = 0;
-    while (command[arg_count] != NULL)
-    {
-        arg_count++;
-    }
-
-    // Allocate memory for new history entry
-    struct command_history *new_command = malloc(sizeof(struct command_history));
-    if (!new_command)
-    {
-        perror("Warning: malloc for add_history failed");
-        return 1;
-    }
-
-    // Allocate memory for argument list
-    new_command->command = malloc((arg_count + 1) * sizeof(char *));
-    if (!new_command->command)
-    {
-        perror("Warning: malloc for command array failed");
-        free(new_command);
-        return 1;
-    }
-
-    // Copy each argument
-    for (int i = 0; i < arg_count; i++)
-    {
-        new_command->command[i] = strdup(command[i]);
-        if (!new_command->command[i])
-        {
-            perror("Warning: malloc for command string failed");
-            // Free allocated memory before returning
-            for (int j = 0; j < i; j++)
-                free(new_command->command[j]);
-            free(new_command->command);
-            free(new_command);
-            return 1;
-        }
-    }
-    new_command->command[arg_count] = NULL; // Null-terminate the array
-    new_command->arg_count = arg_count;
-    new_command->next = NULL;
-
-    // If history is empty, set this as the first command
-    if (!history)
-    {
-        history = new_command;
-        return 0;
-    }
-
-    // Traverse to the end of the history list
-    struct command_history *current = history;
-    while (current->next != NULL)
-    {
-        current = current->next;
-    }
-
-    // Append new command to history
-    current->next = new_command;
-    return 0;
-}
 
 /**
  * @brief Main debugger interface loop
@@ -313,23 +172,18 @@ extern void interface_loop(struct sylvan_inferior **inf)
     char **line;
     while ((line = get_command(prompt)) != NULL)
     {
-
         if (strcmp(line[0], "") == 0)
         {
             free_command(line);
             continue;
         }
 
-        if (add_history(line))
-        {
-            break;
-        }
         if (handle_command(line, inf))
         {
             free_command(line);
             break;
         }
-        
+
         free_command(line);
     }
 
@@ -337,6 +191,4 @@ extern void interface_loop(struct sylvan_inferior **inf)
     {
         printf("\n");
     }
-
-    free_history();
 }
