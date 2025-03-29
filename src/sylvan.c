@@ -7,11 +7,15 @@
 #include <unistd.h>
 #include <sys/user.h>
 #include <sylvan/inferior.h>
+#include <signal.h>
+
 #include "cmd.h"
 #include "user_interface.h"
 
+extern volatile sig_atomic_t interrupted = 0; 
 
-void cmd_args_init(struct cmd_args *args) {
+void cmd_args_init(struct cmd_args *args)
+{
     struct cmd_args tmp = {
         .file_args = NULL,
         .filepath = NULL,
@@ -21,7 +25,8 @@ void cmd_args_init(struct cmd_args *args) {
     *args = tmp;
 }
 
-void print_help() {
+void print_help()
+{
     printf("Usage: sylvan [options]\n");
     printf("  -h, --help                Show this help message\n");
     printf("  -v, --version             Show version information\n");
@@ -29,56 +34,62 @@ void print_help() {
     printf("  -p, --attach <pid>        Attach to a process with process id <pid>\n");
 }
 
-void print_version() {
+void print_version()
+{
     printf("Version 0.1.0\n");
 }
 
-void print_invalid_opt() {
+void print_invalid_opt()
+{
     fprintf(stderr, "Use 'sylvan -h or --help' to print a list of options.\n");
 }
 
-
-void parse_args(int argc, char *argv[], struct cmd_args *cmd_args) {
+void parse_args(int argc, char *argv[], struct cmd_args *cmd_args)
+{
 
     struct option long_options[] = {
-        { "help",       no_argument,        NULL, 'h' },
-        { "version",    no_argument,        NULL, 'v' },
-        { "args",       required_argument,  NULL, 'a' },
-        { "attach",     required_argument,  NULL, 'p' },
-        { 0, 0, 0, 0 },
+        {"help", no_argument, NULL, 'h'},
+        {"version", no_argument, NULL, 'v'},
+        {"args", required_argument, NULL, 'a'},
+        {"attach", required_argument, NULL, 'p'},
+        {0, 0, 0, 0},
     };
 
     char opt;
 
-    while ((opt = getopt_long(argc, argv, "hva:p:", long_options, NULL)) != -1) {
-        switch (opt) {
+    while ((opt = getopt_long(argc, argv, "hva:p:", long_options, NULL)) != -1)
+    {
+        switch (opt)
+        {
 
-            case 'h':
-                print_help();
-                exit(EXIT_SUCCESS);
-            case 'v':
-                print_version();
-                exit(EXIT_SUCCESS);
+        case 'h':
+            print_help();
+            exit(EXIT_SUCCESS);
+        case 'v':
+            print_version();
+            exit(EXIT_SUCCESS);
 
-            case 'a':
-                cmd_args->file_args = optarg;
-                break;
-            case 'p': {
-                char *end;
-                pid_t pid = strtol(optarg, &end, 10);
-                if (*end != '\0') {
-                    fprintf(stderr, "Invalid process id: %s\n", optarg);
-                    exit(EXIT_FAILURE);
-                }
-                cmd_args->is_attached = true;
-                cmd_args->pid = pid;
-                break;
+        case 'a':
+            cmd_args->file_args = optarg;
+            break;
+        case 'p':
+        {
+            char *end;
+            pid_t pid = strtol(optarg, &end, 10);
+            if (*end != '\0')
+            {
+                fprintf(stderr, "Invalid process id: %s\n", optarg);
+                exit(EXIT_FAILURE);
             }
-            case '?':
-                print_invalid_opt();
-                exit(EXIT_FAILURE);
-            default:
-                exit(EXIT_FAILURE);
+            cmd_args->is_attached = true;
+            cmd_args->pid = pid;
+            break;
+        }
+        case '?':
+            print_invalid_opt();
+            exit(EXIT_FAILURE);
+        default:
+            exit(EXIT_FAILURE);
         }
     }
 
@@ -89,106 +100,88 @@ void parse_args(int argc, char *argv[], struct cmd_args *cmd_args) {
     if (optind < argc)
         cmd_args->filepath = argv[optind++];
 
-    if (optind < argc) {
+    if (optind < argc)
+    {
         fprintf(stderr, "Ignoring excess options: ");
         while (optind < argc)
             fprintf(stderr, "%s ", argv[optind++]);
         fprintf(stderr, "\n");
     }
-
 }
 
-void error(const char *msg) {
+void error(const char *msg)
+{
     fprintf(stderr, msg);
     fprintf(stderr, "\n");
     // exit(EXIT_FAILURE);
 }
 
-int main(int argc, char *argv[]) {
 
-    struct cmd_args cmd_args;
-    cmd_args_init(&cmd_args);
+static void handle_sigint(int sig)
+{
+    (void)sig;
+    interrupted = 1;   
+}
+
+int main(int argc, char *argv[])
+{
+    struct cmd_args cmd_args = {0};
+    struct sylvan_inferior *inf = NULL;
+
+    if (signal(SIGINT, handle_sigint) == SIG_ERR)
+    {
+        perror("Failed to set SIGINT handler");
+        return EXIT_FAILURE;
+    }
 
     parse_args(argc, argv, &cmd_args);
 
-    printf("running temporary program before the cli is ready\n");
-
-    struct sylvan_inferior *inf;
-    if (sylvan_inferior_create(&inf))
+    // Create inferior
+    if (sylvan_inferior_create(&inf) != SYLVANC_OK)
+    {
         error(sylvan_get_last_error());
-
-    if (sylvan_set_args(inf, cmd_args.file_args))
-        error(sylvan_get_last_error());
-
-    if (cmd_args.filepath) {
-        if (sylvan_set_filepath(inf, cmd_args.filepath))
-            error(sylvan_get_last_error());
+        return EXIT_FAILURE;
     }
 
-    if (cmd_args.is_attached) {
-        if (sylvan_attach(inf, cmd_args.pid))
+    if (cmd_args.filepath)
+    {
+        if (sylvan_set_filepath(inf, cmd_args.filepath) != SYLVANC_OK)
+        {
             error(sylvan_get_last_error());
-    } else if (inf->realpath) {
-        printf("exec file: %s\n", inf->realpath);
-        if (sylvan_run(inf))
-            error(sylvan_get_last_error());
-    }
-
-    printf("s: single step\n");
-    printf("c: continue\n");
-    printf("r: regs (rip, rsp, rax)\n");
-    printf("a: set rax\n");
-    printf("q: quit\n");
-
-    struct user_regs_struct regs = {};
-
-    char ch;
-
-    bool cont = true;
-
-
-    while (cont) {
-        printf("sylvan> ");
-        scanf(" %c", &ch);
-        switch (ch) {
-            case 'a':
-                if (sylvan_get_regs(inf, &regs)) {
-                    error(sylvan_get_last_error());
-                } else {
-                    printf("value: ");
-                    scanf("%lld", &regs.rax);
-                    if (sylvan_set_regs(inf, &regs))
-                        error(sylvan_get_last_error());
-                }
-                break;
-            case 'c':
-                if (sylvan_continue(inf))
-                    error(sylvan_get_last_error());
-                else
-                    printf("program exited\n");
-                break;
-            case 'r':
-                if (sylvan_get_regs(inf, &regs)) {
-                    error(sylvan_get_last_error());
-                } else {
-                    printf("rip: %llx\n", regs.rip);
-                    printf("rsp: %llx\n", regs.rsp);
-                    printf("rax: %llx\n", regs.rax);
-                }
-                break;
-            case 's':
-                if (sylvan_stepinst(inf))
-                    error(sylvan_get_last_error());
-                break;
-            case 'q':
-                cont = false;
-                break;
+            sylvan_inferior_destroy(inf);
+            return EXIT_FAILURE;
         }
     }
 
-    if (sylvan_inferior_destroy(inf))
+    if (cmd_args.file_args)
+    {
+        if (sylvan_set_args(inf, cmd_args.file_args) != SYLVANC_OK)
+        {
+            error(sylvan_get_last_error());
+            sylvan_inferior_destroy(inf);
+            return EXIT_FAILURE;
+        }
+    }
+
+    if (cmd_args.is_attached)
+    {
+        if (sylvan_attach(inf, cmd_args.pid) != SYLVANC_OK)
+        {
+            error(sylvan_get_last_error());
+            sylvan_inferior_destroy(inf);
+            return EXIT_FAILURE;
+        }
+        printf("Attached to process %d\n", cmd_args.pid);
+    }
+    
+    interface_loop(&inf);
+
+    printf("Pid: %d\n", inf->pid);
+    if (inf && sylvan_inferior_destroy(inf) != SYLVANC_OK)
+    {
         error(sylvan_get_last_error());
+        return EXIT_FAILURE;
+    }
 
     return EXIT_SUCCESS;
-
 }

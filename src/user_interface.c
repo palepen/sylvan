@@ -5,79 +5,104 @@
 #include <unistd.h>
 #include <limits.h>
 #include <string.h>
+#include <signal.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #include "user_interface.h"
-#include "command_handler.h"
+#include "handle_command.h"
 
-#define DEFAULT_TERM_WIDTH 80 /**< Default terminal width if detection fails */
-#define PROMPT_MAX_LEN 50     /**< Maximum length of command prompt */
-int history_count = 0;
+extern volatile sig_atomic_t interrupted;
 
-struct command_history *history;
-
-/**
- * @brief Reads a line of input from the user dynamically.
- * @param prompt The prompt string displayed before input.
- * @return A dynamically allocated string containing the user's input (must be freed).
- */
-static char *get_command(const char *prompt)
+static char **get_command(const char *prompt)
 {
-    if (prompt)
-        printf("%s", prompt);
-
-    size_t bufsize = INITIAL_BUFFER_SIZE;
-    char *buffer = malloc(bufsize);
-    if (!buffer)
+    if (prompt == NULL)
     {
-        perror("Error: malloc error");
+        fprintf(stderr, "Error: Prompt is NULL\n");
         return NULL;
     }
 
-    size_t pos = 0;
-    int c;
+    char *input = readline(prompt);
 
-    while (1)
+    if (interrupted)
     {
-        c = getchar();
-        if (c == EOF || c == '\n')
-        {
-            buffer[pos] = '\0'; // Null-terminate the string
-            break;
-        }
-
-        // Handle backspace
-        if (c == 127 || c == '\b')
-        {
-            if (pos > 0)
-            {
-                pos--;
-                printf("\b \b"); // Move cursor back, clear character
-                fflush(stdout);
-            }
-            continue;
-        }
-
-        buffer[pos++] = c;
-
+        free(input);
+        return NULL;
     }
 
-    return buffer;
+    if (input[0] != '\0')
+    {
+        add_history(input);
+    }
+
+    size_t arg_count = 0, arg_size = INITIAL_ARG_COUNT;
+    char **args = malloc(arg_size * sizeof(char *));
+    if (args == NULL)
+    {
+        perror("Error: malloc failed for args");
+        free(input);
+        return NULL;
+    }
+
+    char *token = strtok(input, " ");
+    while (token != NULL)
+    {
+        args[arg_count] = strdup(token);
+        if (args[arg_count] == NULL)
+        {
+            perror("Error: strdup failed");
+            // Free all prior args
+            for (size_t i = 0; i < arg_count; i++)
+            {
+                free(args[i]);
+            }
+            free(args);
+            free(input);
+            return NULL;
+        }
+
+        arg_count++;
+        if (arg_count >= arg_size - 1)
+        {
+            arg_size *= 2;
+            char **new_args = realloc(args, arg_size * sizeof(char *));
+            if (new_args == NULL)
+            {
+                perror("Error: realloc failed");
+                for (size_t i = 0; i < arg_count; i++)
+                {
+                    free(args[i]);
+                }
+                free(args);
+                free(input);
+                return NULL;
+            }
+            args = new_args;
+        }
+        token = strtok(NULL, " ");
+    }
+
+    args[arg_count] = NULL;
+    if (input)
+        free(input);
+
+    return args;
 }
 
 /**
- * @brief Frees all stored command history.
+ * @brief Frees a dynamically allocated NULL-terminated array of strings.
+ * @param args The array of strings to be freed.
  */
-static void free_history()
+static void free_command(char **args)
 {
-    while(history != NULL)
+    if (args == NULL)
+        return;
+    for (size_t i = 0; args[i] != NULL; i++)
     {
-        struct command_history *curr = history;
-        history = history->next;
-        free(curr->command);
-        free(curr);
+        if (args[i])
+            free(args[i]);
     }
-
-    history_count = 0;
+    free(args);
 }
 
 /**
@@ -85,7 +110,7 @@ static void free_history()
  */
 static void clear_screen(void)
 {
-    printf("\033[2J\033[H"); // ANSI escape: clear screen and move cursor to top
+    printf("\033[2J\033[H");
 }
 
 /**
@@ -97,7 +122,6 @@ static int get_terminal_width(void)
     struct winsize w = {0};
     int fds[] = {STDOUT_FILENO, STDERR_FILENO};
 
-    // Try to get width from stdout or stderr
     for (int i = 0; i < 2; i++)
     {
         if (isatty(fds[i]) && ioctl(fds[i], TIOCGWINSZ, &w) == 0 && w.ws_col > 0)
@@ -106,7 +130,6 @@ static int get_terminal_width(void)
         }
     }
 
-    // Fallback to COLUMNS environment variable
     const char *env_cols = getenv("COLUMNS");
     if (env_cols)
     {
@@ -133,7 +156,6 @@ static void print_heading(void)
     int left_pad = (width - title_len) / 2;
     int right_pad = width - title_len - left_pad;
 
-    // Top border
     printf("\n%s╔", CYAN);
     for (int i = 0; i < width - 2; i++)
     {
@@ -141,7 +163,6 @@ static void print_heading(void)
     }
     printf("╗%s\n", RESET);
 
-    // Title with padding
     printf("%s%s%*s%s%*s%s\n",
            BOLD, MAGENTA,
            left_pad, "",
@@ -149,7 +170,6 @@ static void print_heading(void)
            right_pad, "",
            RESET);
 
-    // Bottom border
     printf("%s╚", CYAN);
     for (int i = 0; i < width - 2; i++)
     {
@@ -158,92 +178,78 @@ static void print_heading(void)
     printf("╝%s\n\n", RESET);
 }
 
-/**
- * @brief Adds the current command to the history
- * @return 0 if success or 1 if error
- * @param[in] command current command given
- */
-int add_history(char *command)
-{
-    if(!command)
-    {
-        fprintf(stderr, "invalid command given\n");
-        return 1;
-    }
-    struct command_history* new_command = (struct command_history*)malloc(sizeof(struct command_history));
-    size_t len = strlen(command);
-    new_command->command = (char*)malloc(sizeof(len));
-    
-    if(!new_command || !new_command->command)
-    {
-        perror("Warning: malloc for add history failed");
-        return 1;
-    }   
-    new_command->next = NULL;
-    
-    if(!history) 
-    {
-        history = new_command;
-        return 0;        
-    }
 
-    while(history->next != NULL)
+static int event_hook(void)
+{
+    if (interrupted)
     {
-        history = history->next;
+        rl_done = 1; 
+        rl_replace_line("", 0);
+        rl_crlf();             
+        rl_redisplay();
+        return 1;
     }
-    history->next = new_command;
     return 0;
 }
 
-
 /**
- * @brief Main debugger interface loop
- * @details Provides a command-line interface for debugger operations
- * @param[in,out] proc Pointer to the debug process structure
+ * @brief Runs the main interactive loop for the Sylvan Inferior shell.
+ *
+ * This function sets up signal handling, initializes the Readline library,
+ * configures the command prompt, and enters an interactive loop for command execution.
+ * The loop continues until interrupted or an exit command is issued.
+ *
+ * @param[in,out] inf A pointer to a struct sylvan_inferior object, which maintains
+ *                    state information for the shell.
  */
-extern void interface_loop(struct sylvan_inferior *inf)
+extern void interface_loop(struct sylvan_inferior **inf)
 {
 
-    if (!inf)
-    {
-        fprintf(stderr, "Error: Invalid process structure\n");
-        return;
-    }
 
     print_heading();
+    init_commands();
+
+    rl_initialize();
+    rl_catch_signals = 1;
+    rl_set_signals();
+    rl_event_hook = event_hook;
 
     char prompt[PROMPT_MAX_LEN];
     snprintf(prompt, sizeof(prompt),
              "%s[%ssylvan%s]%s➤%s ",
              BLUE, MAGENTA, BLUE, YELLOW, RESET);
 
-    char *line;
-    while ((line = get_command(prompt)) != NULL)
+    char **line = NULL;
+    while (!interrupted)
     {
-
-        if(strcmp(line, "") == 0)
+        line = get_command(prompt);
+        if (line == NULL)
         {
-            free(line);
+            if (interrupted)
+            {
+                printf("Interrupted, exiting\n");
+                break;
+            }
             continue;
         }
 
-        if(add_history(line))
+        if (line[0] == NULL || line[0][0] == '\0')
         {
-            break;   
+            free_command(line);
+            continue;
         }
 
         if (handle_command(line, inf))
         {
-            free(line);
+            free_command(line);
             break;
         }
-        free(line);
+        free_command(line);
     }
 
-    if (!line)
-    { 
-        printf("\n");
-    }
-
-    free_history();
+    clear_history();
+    rl_clear_history();
+    rl_free_line_state();
+    rl_cleanup_after_signal();
+    rl_deprep_terminal();
 }

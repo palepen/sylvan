@@ -9,7 +9,7 @@ INCLUDE     := include
 C_INCLUDE   := $(patsubst %, -I%, $(INCLUDE))
 
 CC_FLAGS    := -Wall -Wextra -Wmissing-field-initializers -MMD -MP $(C_INCLUDE)
-LD_FLAGS    :=
+LD_FLAGS    := -lreadline
 
 OBJS := $(patsubst %.c, $(BUILD)/%.o, $(C_SRC))
 DEPS := $(OBJS:.o=.d)
