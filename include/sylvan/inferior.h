@@ -1,6 +1,7 @@
 #ifndef SYLVAN_INCLUDE_SYLVAN_INFERIOR_H
 #define SYLVAN_INCLUDE_SYLVAN_INFERIOR_H
 
+#include <sylvan/breakpoint.h>
 #include <sylvan/error.h>
 #include <stdbool.h>
 #include <sys/types.h>
@@ -14,6 +15,7 @@ typedef enum {
     SYLVAN_INFSTATE_STOPPED,
 } sylvan_inferior_state_t;
 
+
 struct sylvan_inferior {
     int id;
     pid_t pid;
@@ -21,6 +23,9 @@ struct sylvan_inferior {
     char *realpath;
     char *args;
     bool is_attached;
+
+    struct sylvan_breakpoint breakpoints[MAX_BREAKPOINTS];
+    int breakpoint_count;
 };
 
 sylvan_code_t sylvan_inferior_create(struct sylvan_inferior **inf);

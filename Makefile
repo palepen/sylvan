@@ -23,7 +23,7 @@ $(BUILD)/%.o: %.c Makefile
 	$(CC) $(CC_FLAGS) -c $< -o $@
 
 $(BUILD)/$(TARGET): $(OBJS) Makefile
-	$(CC) $(LD_FLAGS) $(OBJS) -o $@
+	$(CC) $(OBJS) -o $@ $(LD_FLAGS)
 
 run: $(BUILD)/$(TARGET)
 	$(BUILD)/$(TARGET) $(ARGS)

@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -6,7 +7,6 @@
 
 #include "error.h"
 #include "utils.h"
-
 
 /**
  * see lib/utils.h
@@ -16,8 +16,11 @@ sylvan_code_t sylvan_real_path(const char *filepath, char **real_path) {
     assert(filepath != NULL && real_path != NULL);
 
     char *path = realpath(filepath, NULL);
-    if (path == NULL)
-        return sylvan_set_code(SYLVANC_FILE_NOT_FOUND);
+    if (path == NULL) {
+        if (errno == ENOENT)
+            return sylvan_set_code(SYLVANC_FILE_NOT_FOUND);
+        return sylvan_set_errno_msg(SYLVANC_SYSTEM_ERROR, "real path");
+    }
 
     *real_path = path;
     return SYLVANC_OK;
@@ -81,7 +84,7 @@ sylvan_code_t sylvan_canonical_path(const char *filepath, char **canonical_path)
     }
 
     if (code != SYLVANC_FILE_NOT_FOUND)
-        return  sylvan_set_errno(code);
+        return  code;
     if ((code = sylvan_find_in_PATH(filepath, &path)))
         return code;
 

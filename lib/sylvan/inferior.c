@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -13,6 +14,7 @@
 #include <wordexp.h>
 
 #include <sylvan/inferior.h>
+#include "breakpoint.h"
 #include "error.h"
 #include "utils.h"
 
@@ -23,16 +25,16 @@ static int sylvan_inferior_count = 0;
 /**
  * checks for a change in the state of the process and updates the inferior state
  */
-static sylvan_code_t sylvan_update_inf_status(struct sylvan_inferior *inf) {
+static sylvan_code_t sylvan_update_inf_status(struct sylvan_inferior *inf, int *status, bool blocking) {
 
     assert(inf != NULL); /* inf should not be NULL in an internal library function */
 
     if (inf->pid <= 0)
         return sylvan_set_code(SYLVANC_PROC_NOT_FOUND);
 
-    int result, status;
+    int result, status_;
     do {
-        result = waitpid(inf->pid, &status, WNOHANG);
+        result = waitpid(inf->pid, &status_, blocking ? 0 : WNOHANG);
     } while (result == -1 && errno == EINTR);
 
     if (!result)   /* no change in state */
@@ -55,21 +57,24 @@ static sylvan_code_t sylvan_update_inf_status(struct sylvan_inferior *inf) {
     }
 
     /* there's a status change */
-    if (WIFEXITED(status)) {
+    if (WIFEXITED(status_)) {
         inf->status = SYLVAN_INFSTATE_EXITED;
-        return sylvan_set_message(SYLVANC_PROC_EXITED, "Process %d exited with code %d", inf->pid, WEXITSTATUS(status));
+        return sylvan_set_message(SYLVANC_PROC_EXITED, "Process %d exited with code %d", inf->pid, WEXITSTATUS(status_));
     }
-    if (WIFSIGNALED(status)) {
+    if (WIFSIGNALED(status_)) {
         inf->status = SYLVAN_INFSTATE_TERMINATED;
-        return sylvan_set_message(SYLVANC_PROC_TERMINATED, "Process %d terminated by signal %d", inf->pid, WTERMSIG(status));
+        return sylvan_set_message(SYLVANC_PROC_TERMINATED, "Process %d terminated by signal %d", inf->pid, WTERMSIG(status_));
     }
-    if (WIFSTOPPED(status))
+    if (WIFSTOPPED(status_))
         inf->status = SYLVAN_INFSTATE_STOPPED;
     else
-    if (WIFCONTINUED(status))
+    if (WIFCONTINUED(status_))
         inf->status = SYLVAN_INFSTATE_RUNNING;
     else
         assert(0); /* this shouldn't happen */
+
+    if (status)
+        *status = status_;
 
     return SYLVANC_OK;
 
@@ -269,7 +274,7 @@ sylvan_code_t sylvan_detach(struct sylvan_inferior *inf) {
     if (!inf->is_attached)
         return sylvan_set_message(SYLVANC_PROC_NOT_ATTACHED, "Process is not being traced");
 
-    sylvan_code_t code = sylvan_update_inf_status(inf);
+    sylvan_code_t code = sylvan_update_inf_status(inf, NULL, false);
     if (code == SYLVANC_PROC_EXITED || code == SYLVANC_PROC_TERMINATED)
         return SYLVANC_OK;
 
@@ -352,6 +357,7 @@ static void handle_child(struct sylvan_inferior *inf, int fd[2]) {
  * handles parent process
  */
 static sylvan_code_t handle_parent(pid_t pid, struct sylvan_inferior *inf, int fd[2]) {
+
 
     if (close(fd[1]) < 0)
         return sylvan_set_errno_msg(SYLVANC_SYSTEM_ERROR, "close pipe");
@@ -440,36 +446,73 @@ sylvan_code_t sylvan_run(struct sylvan_inferior *inf) {
 }
 
 /**
- * continues the stopped process
+ * helper function to handle breakpoint at current instruction address
  */
-sylvan_code_t sylvan_continue(struct sylvan_inferior *inf) {
+static sylvan_code_t sylvan_handle_breakpoint_at_current_addr(struct sylvan_inferior *inf, int *wstatus) {
+    sylvan_code_t code;
+    
+    struct user_regs_struct regs;
+    if (ptrace(PTRACE_GETREGS, inf->pid, NULL, &regs) < 0)
+        return sylvan_set_errno_msg(SYLVANC_PTRACE_GETREGS_FAILED, "ptrace get regs");
+
+    struct sylvan_breakpoint *breakpoint;
+    if (sylvan_breakpoint_find_by_addr(inf, regs.rip, &breakpoint) == SYVLANC_BREAKPOINT_NOT_FOUND)
+        return SYVLANC_BREAKPOINT_NOT_FOUND;
+
+    if ((code = sylvan_breakpoint_disable_bp(inf, breakpoint)))
+        return code;
+
+    if (ptrace(PTRACE_SINGLESTEP, inf->pid, NULL, NULL) < 0)
+        return sylvan_set_errno_msg(SYLVANC_PTRACE_STEP_FAILED, "ptrace single step");
+
+    if ((code = sylvan_update_inf_status(inf, wstatus, true)))
+        return code;
+
+    if ((code = sylvan_breakpoint_enable_bp(inf, breakpoint)))
+        return code;
+    return SYLVANC_OK;
+}
+
+/**
+ * validates process state before operations
+ */
+static sylvan_code_t sylvan_validate_process_state(struct sylvan_inferior *inf, int *wstatus) {
     if (inf == NULL)
         return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
     
     sylvan_code_t code;
-    if ((code = sylvan_update_inf_status(inf)))
+    if ((code = sylvan_update_inf_status(inf, wstatus, false)))
         return code;
-    
-    if (inf->status != SYLVAN_INFSTATE_STOPPED) {
+
+    if ((inf->status != SYLVAN_INFSTATE_STOPPED)) {
         if (inf->status == SYLVAN_INFSTATE_RUNNING)
             return sylvan_set_message(SYLVANC_PROC_RUNNING, "Process %d is already running", inf->pid);
         return sylvan_set_message(SYLVANC_INVALID_STATE, "Process %d is not in a stopped state", inf->pid);
     }
+    
+    return SYLVANC_OK;
+}
+
+/**
+ * continues the stopped process
+ */
+sylvan_code_t sylvan_continue(struct sylvan_inferior *inf) {
+    int wstatus;
+    sylvan_code_t code;
+    
+    if ((code = sylvan_validate_process_state(inf, &wstatus)))
+        return code;
+
+    if (WIFSTOPPED(wstatus) && WSTOPSIG(wstatus))
+        if ((code = sylvan_handle_breakpoint_at_current_addr(inf, &wstatus)) && code != SYVLANC_BREAKPOINT_NOT_FOUND)
+            return code;
 
     if (ptrace(PTRACE_CONT, inf->pid, NULL, NULL) < 0)
         return sylvan_set_errno_msg(SYLVANC_PTRACE_CONT_FAILED, "ptrace cont");
     
-    int status;
-    int res;
-    do {
-        res = waitpid(inf->pid, &status, 0);
-    } while (res == -1 && errno == EINTR);
-    
-    if (res == -1)
-        return sylvan_set_errno_msg(SYLVANC_WAITPID_FAILED, "waitpid");
-    
-    sylvan_update_wait_status(status, inf);
-    
+    if ((code = sylvan_update_inf_status(inf, NULL, true)))
+        return code;
+
     return SYLVANC_OK;
 }
 
@@ -477,34 +520,24 @@ sylvan_code_t sylvan_continue(struct sylvan_inferior *inf) {
  * steps through a single instruction
  */
 sylvan_code_t sylvan_stepinst(struct sylvan_inferior *inf) {
-    if (inf == NULL)
-        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
-        
+    int wstatus;
     sylvan_code_t code;
-    if ((code = sylvan_update_inf_status(inf)))
+    
+    if ((code = sylvan_validate_process_state(inf, &wstatus)))
         return code;
-        
-    if (inf->status != SYLVAN_INFSTATE_STOPPED)
-        return sylvan_set_message(SYLVANC_INVALID_STATE, "Process must be stopped to single-step");
 
-    if (ptrace(PTRACE_SINGLESTEP, inf->pid, NULL, NULL) < 0)
-        return sylvan_set_errno_msg(SYLVANC_PTRACE_STEP_FAILED, "ptrace single step");
-    
-    int status;
-    int res;
-    do {
-        res = waitpid(inf->pid, &status, 0);
-    } while (res == -1 && errno == EINTR);
-    
-    if (res == -1)
-        return sylvan_set_errno_msg(SYLVANC_WAITPID_FAILED, "waitpid");
-    
-    sylvan_update_wait_status(status, inf);
+    if (WIFSTOPPED(wstatus) && WSTOPSIG(wstatus) == SIGTERM) {
+        if ((code = sylvan_handle_breakpoint_at_current_addr(inf, &wstatus)) && code != SYVLANC_BREAKPOINT_NOT_FOUND)
+            return code;
+    } else {
+        if (ptrace(PTRACE_SINGLESTEP, inf->pid, NULL, NULL) < 0)
+            return sylvan_set_errno_msg(SYLVANC_PTRACE_STEP_FAILED, "ptrace single step");
+        if ((code = sylvan_update_inf_status(inf, &wstatus, true)))
+            return code;
+    }
     
     return SYLVANC_OK;
 }
-
-
 /**
  * gets cpu regs
  */
@@ -512,8 +545,8 @@ sylvan_code_t sylvan_get_regs(struct sylvan_inferior *inf, struct user_regs_stru
     if (inf == NULL || regs == NULL)
         return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
     
-    sylvan_code_t code = sylvan_update_inf_status(inf);
-    if ((code = sylvan_update_inf_status(inf)))
+    sylvan_code_t code;
+    if ((code = sylvan_update_inf_status(inf, NULL, false)))
         return code;
 
     if (inf->status != SYLVAN_INFSTATE_STOPPED && inf->status != SYLVAN_INFSTATE_RUNNING)
@@ -532,8 +565,8 @@ sylvan_code_t sylvan_set_regs(struct sylvan_inferior *inf, const struct user_reg
     if (inf == NULL || regs == NULL)
         return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
     
-    sylvan_code_t code = sylvan_update_inf_status(inf);
-    if (code != SYLVANC_OK)
+    sylvan_code_t code;
+    if ((code = sylvan_update_inf_status(inf, NULL, false)))
         return code;
     
     if (inf->status != SYLVAN_INFSTATE_STOPPED && inf->status != SYLVAN_INFSTATE_RUNNING)

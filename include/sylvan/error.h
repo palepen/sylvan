@@ -42,6 +42,14 @@ typedef enum sylvan_code_t {
     SYLVANC_PTRACE_STEP_FAILED             ,    /* single-step failed */
     SYLVANC_PTRACE_GETREGS_FAILED          ,    /* could not get regs */
     SYLVANC_PTRACE_SETREGS_FAILED          ,    /* could not set regs */
+    SYLVANC_PTRACE_PEEKTEXT_FAILED         ,    /* could not read from memory */
+    SYLVANC_PTRACE_POKETEXT_FAILED         ,    /* could not write to memory */
+
+    /* breakpoint errors */
+    SYVLANC_BREAKPOINT_ERROR        = 0x500,
+    SYVLANC_BREAKPOINT_ALREADY_EXISTS      ,    /* breakpoint already exits at memory address */
+    SYVLANC_BREAKPOINT_NOT_FOUND           ,    /* breakpoint not found */
+    SYVLANC_BREAKPOINT_LIMIT_REACHED       ,    /* too many breakpoints */
 
 } sylvan_code_t;
 

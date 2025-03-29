@@ -25,6 +25,7 @@ const char *sylvan_strerror(sylvan_code_t code) {
         case SYLVANC_FILE_NOT_FOUND:            return "File not found or not accessible";
         case SYLVANC_NOT_EXECUTABLE:            return "File is not executable";
 
+        case SYLVANC_PROC_ERROR:                return "Process error";
         case SYLVANC_PROC_NOT_FOUND:            return "Process does not exist";
         case SYLVANC_PROC_NOT_ATTACHED:         return "Process is not being traced";
         case SYLVANC_PROC_ALREADY_ATTACHED:     return "Process is already being traced";
@@ -49,6 +50,13 @@ const char *sylvan_strerror(sylvan_code_t code) {
         case SYLVANC_PTRACE_STEP_FAILED:        return "Single step failed";
         case SYLVANC_PTRACE_GETREGS_FAILED:     return "Get registers failed";
         case SYLVANC_PTRACE_SETREGS_FAILED:     return "Set registers failed";
+        case SYLVANC_PTRACE_PEEKTEXT_FAILED:    return "Could not read from memory";
+        case SYLVANC_PTRACE_POKETEXT_FAILED:    return "Could not write to memory";
+
+        case SYVLANC_BREAKPOINT_ERROR:          return "Breakpoint error";
+        case SYVLANC_BREAKPOINT_ALREADY_EXISTS: return "Breapoint already exists";
+        case SYVLANC_BREAKPOINT_NOT_FOUND:      return "Breakpoint not found";
+        case SYVLANC_BREAKPOINT_LIMIT_REACHED:  return "Too many breakpoints";
 
     }
     return "Unknown error";
@@ -58,13 +66,6 @@ sylvan_code_t sylvan_set_code(sylvan_code_t code) {
     sylvan_last_error.code      = code;
     sylvan_last_error.os_errno  = errno;
     sylvan_last_error.message   = sylvan_strerror(code);
-    return code;
-}
-
-sylvan_code_t sylvan_set_errno(sylvan_code_t code) {
-    sylvan_last_error.code = code;
-    sylvan_last_error.os_errno = errno;
-    sylvan_last_error.message = strerror(errno);
     return code;
 }
 

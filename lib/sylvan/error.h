@@ -13,9 +13,6 @@ sylvan_code_t sylvan_set_code(sylvan_code_t code);
 /* set error with code and custom message */
 sylvan_code_t sylvan_set_message(sylvan_code_t code, const char *fmt, ...);
 
-/* set error with code and current errno value */
-sylvan_code_t sylvan_set_errno(sylvan_code_t code);
-
 /* set error with code, custom message prefix, and errno details */
 sylvan_code_t sylvan_set_errno_msg(sylvan_code_t code, const char *fmt, ...);
 
