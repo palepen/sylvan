@@ -1,13 +1,15 @@
-#include <stdio.h>      // For printf, fprintf
-#include <stdlib.h>     // For free
-#include <unistd.h>     // For close
-#include <elf.h>        // For ELF types (Elf64_Ehdr, etc.)
-#include <fcntl.h>      // For open
+#include <stdio.h>  // For printf, fprintf
+#include <stdlib.h> // For free
+#include <unistd.h> // For close
+#include <elf.h>    // For ELF types (Elf64_Ehdr, etc.)
+#include <fcntl.h>  // For open
+#include <errno.h>
+#include <string.h>
 
-#include "sylvan/inferior.h"    // For sylvan_inferior, sylvan_run, etc.
-#include "command_handler.h"    // For sylvan_commands, sylvan_info_commands
-#include "auxv.h"               // For auxv_entry, parse_auxv, etc.
-#include "sylvan/error.h"       // For sylvan_code_t, sylvan_get_last_error
+#include "sylvan/inferior.h" // For sylvan_inferior, sylvan_run, etc.
+#include "command_handler.h" // For sylvan_commands, sylvan_info_commands
+#include "auxv.h"            // For auxv_entry, parse_auxv, etc.
+#include "sylvan/error.h"    // For sylvan_code_t, sylvan_get_last_error
 #include "handle_command.h"
 
 /**
@@ -94,15 +96,11 @@ int handle_continue(char **command, struct sylvan_inferior **inf)
         fprintf(stderr, "Null Inferior Pointer\n");
         return 0;
     }
-    if (curr_inf->status != SYLVAN_INFSTATE_STOPPED)
-    {
-        printf("Process is not stopped\n");
-        return 0;
-    }
+
     if (sylvan_continue(curr_inf) < 0)
     {
         fprintf(stderr, "Failed to continue process\n");
-        return 1;
+        return 0;
     }
     return 0;
 }
@@ -203,7 +201,7 @@ int handle_info_auto_load(char **command, struct sylvan_inferior **inf)
 int handle_info_auxv(char **command, struct sylvan_inferior **inf)
 {
     (void)command;
-    
+
     if (!inf || !(*inf))
     {
         fprintf(stderr, "Null Inferior Pointer\n");
@@ -211,7 +209,7 @@ int handle_info_auxv(char **command, struct sylvan_inferior **inf)
     }
 
     struct sylvan_inferior *curr_inf = *inf;
-    if(curr_inf->pid == 0)
+    if (curr_inf->pid == 0)
     {
         printf("Invalid PID\n");
         return 0;
@@ -322,6 +320,7 @@ int handle_info_inferiors(char **command, struct sylvan_inferior **inf)
     printf("Id: %d\n", curr_inf->id);
     printf("\tPID: %d\n", curr_inf->pid);
     printf("\tPath: %s\n", curr_inf->realpath);
+    printf("\tIs Attacheds: %s\n", curr_inf->is_attached);
 
     return 0;
 }
@@ -339,32 +338,60 @@ int handle_add_inferior(char **command, struct sylvan_inferior **inf)
         printf("No file name provided\n");
         return 0;
     }
-    
-    if (*inf)
+
+    sylvan_code_t ret;
+    printf("Adding inferior ..\n");
+    if (strcmp(command[1], "-p") != 0)
     {
-        sylvan_inferior_destroy(*inf);  
+        const char *filepath = command[1];
+        if (filepath)
+        {
+            ret = sylvan_set_filepath(*inf, filepath);
+            if (ret != SYLVANC_OK)
+            {
+                fprintf(stderr, sylvan_get_last_error());
+                printf("\n");
+                return 0;
+            }
+        }
+        sylvan_run(*inf);
     }
-    sylvan_code_t ret = sylvan_inferior_create(inf);
-    if (ret != SYLVANE_OK || !inf)
+    else
+    {
+        if (command[2] == NULL)
+        {
+            printf("No Pid\n");
+            printf("Usage:\n");
+            printf("    add-inferior <filepath>\n   add-inferior -p <pid>\n");
+            return 0;
+        }
+        char *endptr;
+        errno = 0;
+        long pid = strtol(command[2], &endptr, 10);
+
+        if (errno == ERANGE || pid <= 0 || *endptr != '\0')
+        {
+            printf("Invalid PID: %s\n", command[2]);
+            printf("Usage:\n    add-inferior <filepath>\n    add-inferior -p <pid>\n");
+            return 0;
+        }
+        
+        sylvan_attach(*inf, pid);
+    }
+
+    return 0;
+}
+
+
+/**
+ * @brief runs a program which is given in args
+ */
+int handle_run(char **command, struct sylvan_inferior **inf)
+{
+    if(sylvan_run(*inf) != SYLVANC_OK)
     {
         fprintf(stderr, sylvan_get_last_error());
-        return 1;
+        return 0;
     }
-    
-    const char *filepath = command[1];
-    if (filepath)
-    {
-        ret = sylvan_set_filepath(*inf, filepath);
-        if (ret != SYLVANE_OK)
-        {
-            fprintf(stderr, sylvan_get_last_error());
-            sylvan_inferior_destroy(*inf);
-            return 1;
-        }
-    }
-    sylvan_run(*inf);
-    struct sylvan_inferior *curr_inf = *inf;
-    printf("Added inferior %d%s%s\n", curr_inf->pid, filepath ? " with executable " : "", filepath ? filepath : "");
-
     return 0;
 }

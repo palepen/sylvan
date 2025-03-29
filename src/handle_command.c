@@ -190,14 +190,9 @@ int handle_command(char **command, struct sylvan_inferior **inf)
 
     // First, try to find the command directly
     struct sylvan_command_data *cmd = lookup_command(command[0]);
-    if (cmd)
+    if (cmd && !(cmd->id == 5 && command[1] != NULL))
     {
-        // Special case for command with ID 5 (likely "help")
-        if (cmd->id == 5 && command[1] != NULL)
-        {
-            // Fall through to try info command lookup
-        }
-        else if (cmd->handler)
+        if (cmd->handler)
         {
             return cmd->handler(command, inf);
         }
@@ -207,7 +202,7 @@ int handle_command(char **command, struct sylvan_inferior **inf)
             return 0;
         }
     }
-
+    
     // If not found or special case, try info command lookup
     if (command[1] != NULL && strcmp(command[0], "info") == 0)
     {
@@ -232,7 +227,6 @@ int handle_command(char **command, struct sylvan_inferior **inf)
                 strcmp(info_cmd->name, command[1]) == 0 &&
                 info_cmd->id >= 101)
             {
-
                 if (info_cmd->handler)
                 {
                     return info_cmd->handler(command, inf);
