@@ -320,7 +320,7 @@ int handle_info_inferiors(char **command, struct sylvan_inferior **inf)
     printf("Id: %d\n", curr_inf->id);
     printf("\tPID: %d\n", curr_inf->pid);
     printf("\tPath: %s\n", curr_inf->realpath);
-    printf("\tIs Attacheds: %s\n", curr_inf->is_attached);
+    printf("\tIs Attached: %d\n", curr_inf->is_attached);
 
     return 0;
 }
@@ -390,8 +390,19 @@ int handle_run(char **command, struct sylvan_inferior **inf)
 {
     if(sylvan_run(*inf) != SYLVANC_OK)
     {
-        fprintf(stderr, sylvan_get_last_error());
+        fprintf(stderr, "%s\n", sylvan_get_last_error());
         return 0;
     }
+    return 0;
+}
+
+int handle_step_inst(char **command, struct sylvan_inferior **inf)
+{
+    if(sylvan_stepinst(*inf) != SYLVANC_OK)
+    {
+        fprintf(stderr, "%s\n", sylvan_get_last_error());
+        return 0;
+    }
+    printf("Single Instructiong executed\n");
     return 0;
 }

@@ -249,3 +249,4 @@ int handle_command(char **command, struct sylvan_inferior **inf)
     printf("Type 'help' for available commands\n");
     return 0;
 }
+
