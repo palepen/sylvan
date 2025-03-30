@@ -19,5 +19,7 @@ int handle_info_copying(char **command, struct sylvan_inferior **inf);
 int handle_info_inferiors(char **command, struct sylvan_inferior **inf);
 int handle_run(char **command, struct sylvan_inferior **inf);
 int handle_step_inst(char **command, struct sylvan_inferior **inf);
+int handle_file(char **command, struct sylvan_inferior **inf);
+int handle_attach(char **command, struct sylvan_inferior **inf);
 
 #endif

@@ -3,7 +3,7 @@
 #endif
 
 DEFINE_COMMAND(address, "Describe where symbol SYM is stored.", handle_info_address, 101),
-DEFINE_COMMAND(all-registers, "List of all registers and their contents, for selected stack frame.", handle_info_all_registers, 102),
+DEFINE_COMMAND(all-registers, "List of all registers and their contents.", handle_info_all_registers, 102),
 DEFINE_COMMAND(args, "All argument variables of current stack frame or those matching REGEXPs.", handle_info_args, 103),
 DEFINE_COMMAND(auto-load, "Print current status of auto-loaded files.", handle_info_auto_load, 104),
 DEFINE_COMMAND(auxv, "Display the inferior's auxiliary vector.", handle_info_auxv, 105),

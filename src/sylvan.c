@@ -120,7 +120,8 @@ void error(const char *msg)
 static void handle_sigint(int sig)
 {
     (void)sig;
-    interrupted = 1;   
+    interrupted = 1;
+
 }
 
 int main(int argc, char *argv[])
@@ -136,8 +137,7 @@ int main(int argc, char *argv[])
 
     parse_args(argc, argv, &cmd_args);
 
-    // Create inferior
-    if (sylvan_inferior_create(&inf) != SYLVANC_OK)
+    if (sylvan_inferior_create(&inf))
     {
         error(sylvan_get_last_error());
         return EXIT_FAILURE;
@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
 
     if (cmd_args.filepath)
     {
-        if (sylvan_set_filepath(inf, cmd_args.filepath) != SYLVANC_OK)
+        if (sylvan_set_filepath(inf, cmd_args.filepath))
         {
             error(sylvan_get_last_error());
             sylvan_inferior_destroy(inf);
@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
 
     if (cmd_args.file_args)
     {
-        if (sylvan_set_args(inf, cmd_args.file_args) != SYLVANC_OK)
+        if (sylvan_set_args(inf, cmd_args.file_args))
         {
             error(sylvan_get_last_error());
             sylvan_inferior_destroy(inf);
@@ -165,19 +165,15 @@ int main(int argc, char *argv[])
 
     if (cmd_args.is_attached)
     {
-        if (sylvan_attach(inf, cmd_args.pid) != SYLVANC_OK)
+        if (sylvan_attach(inf, cmd_args.pid))
         {
             error(sylvan_get_last_error());
-            sylvan_inferior_destroy(inf);
-            return EXIT_FAILURE;
         }
-        printf("Attached to process %d\n", cmd_args.pid);
     }
     
     interface_loop(&inf);
 
-    printf("Pid: %d\n", inf->pid);
-    if (inf && sylvan_inferior_destroy(inf) != SYLVANC_OK)
+    if (sylvan_inferior_destroy(inf))
     {
         error(sylvan_get_last_error());
         return EXIT_FAILURE;

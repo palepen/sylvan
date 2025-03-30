@@ -97,9 +97,9 @@ int handle_continue(char **command, struct sylvan_inferior **inf)
         return 0;
     }
 
-    if (sylvan_continue(curr_inf) < 0)
+    if (sylvan_continue(curr_inf))
     {
-        fprintf(stderr, "Failed to continue process\n");
+        fprintf(stderr, "%s\n", sylvan_get_last_error());
         return 0;
     }
     return 0;
@@ -154,7 +154,7 @@ int handle_info_all_registers(char **command, struct sylvan_inferior **inf)
         (void)inf;
     }
 
-    printf("No Registers now\n");
+    printf("yet to implement\n");
     return 0;
 }
 
@@ -326,7 +326,7 @@ int handle_info_inferiors(char **command, struct sylvan_inferior **inf)
 }
 
 /**
- * @brief Handler for 'add-inferior' command
+ * @brief Handler for 'add-inferior' command creates a new inferior
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
  * @return 0 on success, 1 on failure
@@ -339,56 +339,33 @@ int handle_add_inferior(char **command, struct sylvan_inferior **inf)
         return 0;
     }
 
-    sylvan_code_t ret;
-    printf("Adding inferior ..\n");
-    if (strcmp(command[1], "-p") != 0)
+    if (*inf)
     {
-        const char *filepath = command[1];
-        if (filepath)
+        if (sylvan_inferior_destroy(*inf))
         {
-            ret = sylvan_set_filepath(*inf, filepath);
-            if (ret != SYLVANC_OK)
-            {
-                fprintf(stderr, sylvan_get_last_error());
-                printf("\n");
-                return 0;
-            }
-        }
-        sylvan_run(*inf);
-    }
-    else
-    {
-        if (command[2] == NULL)
-        {
-            printf("No Pid\n");
-            printf("Usage:\n");
-            printf("    add-inferior <filepath>\n   add-inferior -p <pid>\n");
+            fprintf(stderr, "%s\n", sylvan_get_last_error());
             return 0;
         }
-        char *endptr;
-        errno = 0;
-        long pid = strtol(command[2], &endptr, 10);
+    }
 
-        if (errno == ERANGE || pid <= 0 || *endptr != '\0')
-        {
-            printf("Invalid PID: %s\n", command[2]);
-            printf("Usage:\n    add-inferior <filepath>\n    add-inferior -p <pid>\n");
-            return 0;
-        }
-        
-        sylvan_attach(*inf, pid);
+    if (sylvan_inferior_create(inf))
+    {
+        fprintf(stderr, "%s\n", sylvan_get_last_error());
+        return 0;
     }
+
+    printf("Created New Inferior: \n\tID: %d\n", (*inf)->id);
+    return 0;
 
     return 0;
 }
-
 
 /**
  * @brief runs a program which is given in args
  */
 int handle_run(char **command, struct sylvan_inferior **inf)
 {
-    if(sylvan_run(*inf) != SYLVANC_OK)
+    if (sylvan_run(*inf))
     {
         fprintf(stderr, "%s\n", sylvan_get_last_error());
         return 0;
@@ -398,11 +375,68 @@ int handle_run(char **command, struct sylvan_inferior **inf)
 
 int handle_step_inst(char **command, struct sylvan_inferior **inf)
 {
-    if(sylvan_stepinst(*inf) != SYLVANC_OK)
+    if (sylvan_stepinst(*inf))
     {
         fprintf(stderr, "%s\n", sylvan_get_last_error());
         return 0;
     }
     printf("Single Instructiong executed\n");
+    return 0;
+}
+
+int handle_file(char **command, struct sylvan_inferior **inf)
+{
+
+    if (command[1] == NULL)
+    {
+        fprintf(stderr, "No filename provided\n");
+        return 0;
+    }
+    const char *filepath = command[1];
+
+    if (sylvan_set_filepath(*inf, filepath))
+    {
+        fprintf(stderr, "%s\n", sylvan_get_last_error());
+        return 0;
+    }
+    printf("Attached to inferior id: %d\n", (*inf)->id);
+    return 0;
+}
+
+int handle_attach(char **command, struct sylvan_inferior **inf)
+{
+    if (strcmp(command[1], "-p") != 0)
+    {
+        fprintf(stderr, "Invalid Arguments\n");
+        printf("Usage:\n");
+        printf("   attach -p <pid>\n");
+
+        return 0;
+    }
+    if (command[2] == NULL)
+    {
+        fprintf(stderr, "No Pid\n");
+        printf("Usage:\n");
+        printf("    attach -p <pid>\n");
+        return 0;
+    }
+
+    char *endptr;
+    errno = 0;
+    long pid = strtol(command[2], &endptr, 10);
+
+    if (errno == ERANGE || pid <= 0 || *endptr != '\0')
+    {
+        fprintf(stderr, "Invalid PID: %s\n", command[2]);
+        printf("Usage:\n    add-inferior <filepath>\n    add-inferior -p <pid>\n");
+        return 0;
+    }
+
+    if (sylvan_attach(*inf, pid))
+    {
+        fprintf(stderr, "%s\n", sylvan_get_last_error());
+        return 0;
+    }
+    printf("Attached to inferior id: %d\n", (*inf)->id);
     return 0;
 }

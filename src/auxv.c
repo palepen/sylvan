@@ -9,7 +9,7 @@
 
 #define DEFINE_AUXV_TYPE(type, name, desc) {type, name, desc}
 static const struct auxv_name auxv_names[] = {
-#include "details/auxv_types.def"
+#include "details/auxv_types.h"
     {-1, NULL, NULL} // Sentinel
 };
 #undef DEFINE_AUXV_TYPE
