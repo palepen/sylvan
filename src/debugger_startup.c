@@ -118,7 +118,6 @@ static void handle_sigint(int sig)
 {
     (void)sig;
     interrupted = 1;
-
 }
 
 int debugger_main(int argc, char **argv)

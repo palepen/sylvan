@@ -62,7 +62,7 @@ static unsigned long hash_string(const char *str)
 static int insert_command(struct sylvan_command_data *cmd, const char *full_name)
 {
     if (!cmd || !full_name)
-        return -1;
+        return 1;
 
     cmd->hash = hash_string(full_name);
     unsigned long idx = cmd->hash % HASH_TABLE_SIZE;
@@ -116,7 +116,7 @@ int init_commands()
         if (insert_command(&sylvan_commands[i], sylvan_commands[i].name))
         {
             fprintf(stderr, "Failed to insert command: %s\n", sylvan_commands[i].name);
-            return -1;
+            return 1;
         }
     }
 

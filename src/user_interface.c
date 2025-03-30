@@ -186,7 +186,9 @@ static int event_hook(void)
         rl_done = 1; 
         rl_replace_line("", 0);
         rl_crlf();             
+        printf("exit");
         rl_redisplay();
+        interrupted = 0;
         return 1;
     }
     return 0;
@@ -220,16 +222,11 @@ extern void interface_loop(struct sylvan_inferior **inf)
              BLUE, MAGENTA, BLUE, YELLOW, RESET);
 
     char **line = NULL;
-    while (!interrupted)
+    while (1)
     {
         line = get_command(prompt);
         if (line == NULL)
         {
-            if (interrupted)
-            {
-                printf("Interrupted, exiting\n");
-                break;
-            }
             continue;
         }
 
