@@ -15,27 +15,46 @@
 /**
  * @brief Prints available commands or info subcommands
  * @param tp Type of commands to print (standard or info)
+ * @param print_all 1 - prints all the programs
  */
-static void print_commands(enum sylvan_command_type tp)
+static void print_commands(enum sylvan_command_type tp, int print_all)
 {
     size_t i = 0;
-    if (tp == SYLVAN_STANDARD_COMMAND)
+    switch (tp)
     {
+    case SYLVAN_STANDARD_COMMAND:
         printf("Commands:\n");
-        while (sylvan_commands[i].name && sylvan_commands[i].desc)
+        while (sylvan_commands[i].name)
         {
             printf("    %s  - %s\n", sylvan_commands[i].name, sylvan_commands[i].desc);
             i++;
         }
-    }
-    else if (tp == SYLVAN_INFO_COMMAND)
-    {
+        if (print_all == 0)
+            break;
+
+    case SYLVAN_INFO_COMMAND:
         printf("Info Commands:\n");
-        while (sylvan_info_commands[i].name && sylvan_info_commands[i].desc)
+        while (sylvan_sub_commands[i].name)
         {
-            printf("    info %s  - %s\n", sylvan_info_commands[i].name, sylvan_info_commands[i].desc);
+            if (sylvan_sub_commands[i].command_type == SYLVAN_INFO_COMMAND)
+                printf("    %s  - %s\n", sylvan_sub_commands[i].name, sylvan_sub_commands[i].desc);
             i++;
         }
+        if (print_all == 0)
+            break;
+
+    case SYLVAN_SET_COMMAND:
+        printf("Set Commands:\n");
+        while (sylvan_sub_commands[i].name)
+        {
+            if (sylvan_sub_commands[i].command_type == SYLVAN_SET_COMMAND)
+                printf("    %s  - %s\n", sylvan_sub_commands[i].name, sylvan_sub_commands[i].desc);
+            i++;
+        }
+        if (print_all == 0)
+            break;
+    default:
+        break;
     }
 }
 
@@ -43,7 +62,6 @@ static void print_commands(enum sylvan_command_type tp)
  * @brief Handler for 'help' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 on success
  */
 int handle_help(char **command, struct sylvan_inferior **inf)
 {
@@ -53,7 +71,7 @@ int handle_help(char **command, struct sylvan_inferior **inf)
         (void)inf;
     }
 
-    print_commands(SYLVAN_STANDARD_COMMAND);
+    print_commands(SYLVAN_STANDARD_COMMAND, 0);
     return 0;
 }
 
@@ -61,7 +79,6 @@ int handle_help(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'quit' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 1 to indicate exit
  */
 int handle_exit(char **command, struct sylvan_inferior **inf)
 {
@@ -79,7 +96,6 @@ int handle_exit(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'continue' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 on success, 1 on failure
  */
 int handle_continue(char **command, struct sylvan_inferior **inf)
 {
@@ -109,16 +125,16 @@ int handle_continue(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'info' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 on success
+ * @return 0 to success and 2 to move to sub_command
  */
 int handle_info(char **command, struct sylvan_inferior **inf)
 {
-    if (inf && command)
+    if (command[1])
     {
-        (void)command;
-        (void)inf;
+        return 2;
     }
-    print_commands(SYLVAN_INFO_COMMAND);
+    (void)inf;
+    print_commands(SYLVAN_INFO_COMMAND, 0);
     return 0;
 }
 
@@ -126,7 +142,6 @@ int handle_info(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'info address' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 on success, 1 on failure
  */
 int handle_info_address(char **command, struct sylvan_inferior **inf)
 {
@@ -144,7 +159,6 @@ int handle_info_address(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'info all-registers' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 on success, 1 on failure
  */
 int handle_info_all_registers(char **command, struct sylvan_inferior **inf)
 {
@@ -162,16 +176,16 @@ int handle_info_all_registers(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'info args' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 on success
  */
 int handle_info_args(char **command, struct sylvan_inferior **inf)
 {
-    if (inf && command)
+    if (!inf || !(*inf))
     {
-        (void)command;
-        (void)inf;
+        fprintf(stderr, "Null inferior\n");
     }
-    printf("Done by reading the registers\n");
+    (void)command;
+
+    printf("Arguments: %s\n", (*inf)->args);
     return 0;
 }
 
@@ -179,7 +193,6 @@ int handle_info_args(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'info auto-load' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 on success
  */
 int handle_info_auto_load(char **command, struct sylvan_inferior **inf)
 {
@@ -196,7 +209,6 @@ int handle_info_auto_load(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'info auxv' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 on success, -1 on failure
  */
 int handle_info_auxv(char **command, struct sylvan_inferior **inf)
 {
@@ -247,7 +259,6 @@ int handle_info_auxv(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'info bookmark' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 on success, -1 on failure
  */
 int handle_info_bookmark(char **command, struct sylvan_inferior **inf)
 {
@@ -271,7 +282,6 @@ int handle_info_bookmark(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'info breakpoints' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 on success
  */
 int handle_info_breakpoints(char **command, struct sylvan_inferior **inf)
 {
@@ -290,7 +300,6 @@ int handle_info_breakpoints(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'info copying' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 on success
  */
 int handle_info_copying(char **command, struct sylvan_inferior **inf)
 {
@@ -306,7 +315,6 @@ int handle_info_copying(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'info inferiors' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 on success
  */
 int handle_info_inferiors(char **command, struct sylvan_inferior **inf)
 {
@@ -329,7 +337,6 @@ int handle_info_inferiors(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'add-inferior' command creates a new inferior
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 on success, 1 on failure
  */
 int handle_add_inferior(char **command, struct sylvan_inferior **inf)
 {
@@ -356,8 +363,6 @@ int handle_add_inferior(char **command, struct sylvan_inferior **inf)
 
     printf("Created New Inferior: \n\tID: %d\n", (*inf)->id);
     return 0;
-
-    return 0;
 }
 
 /**
@@ -368,8 +373,8 @@ int handle_run(char **command, struct sylvan_inferior **inf)
     if (sylvan_run(*inf))
     {
         fprintf(stderr, "%s\n", sylvan_get_last_error());
-        return 0;
     }
+    (void)command;
     return 0;
 }
 
@@ -380,7 +385,8 @@ int handle_step_inst(char **command, struct sylvan_inferior **inf)
         fprintf(stderr, "%s\n", sylvan_get_last_error());
         return 0;
     }
-    printf("Single Instructiong executed\n");
+    (void)command;
+    printf("Single Instruction executed\n");
     return 0;
 }
 
@@ -399,7 +405,8 @@ int handle_file(char **command, struct sylvan_inferior **inf)
         fprintf(stderr, "%s\n", sylvan_get_last_error());
         return 0;
     }
-    printf("Attached to inferior id: %d\n", (*inf)->id);
+
+    printf("File %s assigned to inferior id: %d\n", filepath, (*inf)->id);
     return 0;
 }
 
@@ -437,6 +444,65 @@ int handle_attach(char **command, struct sylvan_inferior **inf)
         fprintf(stderr, "%s\n", sylvan_get_last_error());
         return 0;
     }
-    printf("Attached to inferior id: %d\n", (*inf)->id);
+    printf("Process PID: %ld to inferior id: %d\n", pid, (*inf)->id);
+    return 0;
+}
+
+/**
+ * @brief Handler for 'set' command
+ * @param command Array of command strings
+ * @param inf Pointer to the current inferior structure
+ * @return 0 to success and 2 to move to sub_command
+ */
+int handle_set(char **command, struct sylvan_inferior **inf)
+{
+    if (command[1])
+    {
+        return 2;
+    }
+    (void)inf;
+    print_commands(SYLVAN_SET_COMMAND, 0);
+    return 0;
+}
+
+int handle_set_args(char **command, struct sylvan_inferior **inf)
+{
+
+    size_t total_len = 0;
+    int arg_count = 0;
+
+    while (command[arg_count] != NULL)
+    {
+        total_len += strlen(command[arg_count]) + 1;
+        arg_count++;
+    }
+
+    char *args = (char *)malloc(sizeof(char) * total_len);
+    if (!args)
+    {
+        fprintf(stderr, "Memory allocation failed\n");
+        return 0;
+    }
+
+    args[0] = '\0'; 
+
+    for (int i = 0; i < arg_count; i++)
+    {
+        if (i > 0)
+        {
+            strcat(args, " "); 
+        }
+        strcat(args, command[i]);
+    }
+
+    if (sylvan_set_args(*inf, args))
+    {
+        fprintf(stderr, "%s\n", sylvan_get_last_error());
+        free(args);
+        return 0;
+    }
+    printf("Added arguments to inferior: %d\n", (*inf)->id);
+    
+    free(args);
     return 0;
 }

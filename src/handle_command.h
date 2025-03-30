@@ -5,8 +5,9 @@
 
 enum sylvan_command_type
 {
+    SYLVAN_STANDARD_COMMAND,
     SYLVAN_INFO_COMMAND,
-    SYLVAN_STANDARD_COMMAND
+    SYLVAN_SET_COMMAND,
 };
 
 /** @brief Function pointer type for command handlers */
@@ -20,7 +21,7 @@ struct sylvan_command_data
     command_handler_t handler;             ///< Handler function for the command
     const char *func_name;                 ///< Name of the handler function
     unsigned long long hash;                        ///< Precomputed hash of the command name
-    enum sylvan_command_type command_type; ///< INFO_COMMMAND OR STANDARD_COMMAND
+    enum sylvan_command_type command_type; ///< INFO_COMMMAND OR STANDARD_COMMAND or SET_COMMAND
     int id;                                ///< Unique command ID
 };
 
@@ -37,7 +38,7 @@ struct debug_target {
 };
 
 extern struct sylvan_command_data sylvan_commands[];
-extern struct sylvan_command_data sylvan_info_commands[];
+extern struct sylvan_command_data sylvan_sub_commands[];
 extern int handle_command(char **command, struct sylvan_inferior **inf);
 extern int init_commands();
 #endif

@@ -21,5 +21,7 @@ int handle_run(char **command, struct sylvan_inferior **inf);
 int handle_step_inst(char **command, struct sylvan_inferior **inf);
 int handle_file(char **command, struct sylvan_inferior **inf);
 int handle_attach(char **command, struct sylvan_inferior **inf);
+int handle_set(char **command, struct sylvan_inferior **inf);
+int handle_set_args(char **command, struct sylvan_inferior **inf);
 
 #endif
