@@ -30,7 +30,7 @@ static sylvan_code_t sylvan_update_inf_status(struct sylvan_inferior *inf, int *
     assert(inf != NULL); /* inf should not be NULL in an internal library function */
 
     if (inf->pid <= 0)
-        return sylvan_set_code(SYLVANC_PROC_NOT_FOUND);
+        return sylvan_set_message(SYLVANC_INVALID_STATE, "Program is not being run");
 
     int result, status_;
     do {
@@ -58,11 +58,14 @@ static sylvan_code_t sylvan_update_inf_status(struct sylvan_inferior *inf, int *
 
     /* there's a status change */
     if (WIFEXITED(status_)) {
+        int pid = inf->pid;
         inf->status = SYLVAN_INFSTATE_EXITED;
-        return sylvan_set_message(SYLVANC_PROC_EXITED, "Process %d exited with code %d", inf->pid, WEXITSTATUS(status_));
+        inf->pid = 0;
+        return sylvan_set_message(SYLVANC_PROC_EXITED, "Process %d exited with code %d", pid, WEXITSTATUS(status_));
     }
     if (WIFSIGNALED(status_)) {
         inf->status = SYLVAN_INFSTATE_TERMINATED;
+        inf->pid = 0;
         return sylvan_set_message(SYLVANC_PROC_TERMINATED, "Process %d terminated by signal %d", inf->pid, WTERMSIG(status_));
     }
     if (WIFSTOPPED(status_))
@@ -423,7 +426,10 @@ static sylvan_code_t handle_parent(pid_t pid, struct sylvan_inferior *inf, int f
     if ((code = sylvan_breakpoint_setall_phybp(inf)))
         return code;
 
-    return sylvan_continue(inf);
+    if (ptrace(PTRACE_CONT, inf->pid, NULL, NULL) < 0)
+        return sylvan_set_errno_msg(SYLVANC_PTRACE_CONT_FAILED, "ptrace cont");
+
+    return sylvan_update_inf_status(inf, NULL, true);
 }
 
 /**
@@ -471,8 +477,13 @@ static sylvan_code_t sylvan_handle_breakpoint_at_current_addr(struct sylvan_infe
         return sylvan_set_errno_msg(SYLVANC_PTRACE_GETREGS_FAILED, "ptrace get regs");
 
     struct sylvan_breakpoint *breakpoint;
-    if (sylvan_breakpoint_find_by_addr(inf, regs.rip, &breakpoint) == SYVLANC_BREAKPOINT_NOT_FOUND)
+    if (sylvan_breakpoint_find_by_addr(inf, regs.rip - 1, &breakpoint) == SYVLANC_BREAKPOINT_NOT_FOUND)
         return SYVLANC_BREAKPOINT_NOT_FOUND;
+
+    regs.rip--;
+
+    if (ptrace(PTRACE_SETREGS, inf->pid, NULL, &regs) < 0)
+        return sylvan_set_errno_msg(SYLVANC_PTRACE_SETREGS_FAILED, "ptrace set regs");
 
     if ((code = sylvan_breakpoint_disable_ptr(inf, breakpoint)))
         return code;
@@ -512,19 +523,17 @@ static sylvan_code_t sylvan_validate_process_state(struct sylvan_inferior *inf, 
  * continues the stopped process
  */
 sylvan_code_t sylvan_continue(struct sylvan_inferior *inf) {
-    int wstatus;
     sylvan_code_t code;
     
-    if ((code = sylvan_validate_process_state(inf, &wstatus)))
+    if ((code = sylvan_validate_process_state(inf, NULL)))
         return code;
 
-    if (WIFSTOPPED(wstatus) && WSTOPSIG(wstatus))
-        if ((code = sylvan_handle_breakpoint_at_current_addr(inf, &wstatus)) && code != SYVLANC_BREAKPOINT_NOT_FOUND)
-            return code;
+    if ((code = sylvan_handle_breakpoint_at_current_addr(inf, NULL)) && code != SYVLANC_BREAKPOINT_NOT_FOUND)
+        return code;
 
     if (ptrace(PTRACE_CONT, inf->pid, NULL, NULL) < 0)
         return sylvan_set_errno_msg(SYLVANC_PTRACE_CONT_FAILED, "ptrace cont");
-    
+
     if ((code = sylvan_update_inf_status(inf, NULL, true)))
         return code;
 
@@ -535,23 +544,20 @@ sylvan_code_t sylvan_continue(struct sylvan_inferior *inf) {
  * steps through a single instruction
  */
 sylvan_code_t sylvan_stepinst(struct sylvan_inferior *inf) {
-    int wstatus;
     sylvan_code_t code;
     
-    if ((code = sylvan_validate_process_state(inf, &wstatus)))
+    if ((code = sylvan_validate_process_state(inf, NULL)))
         return code;
 
-    if (WIFSTOPPED(wstatus) && WSTOPSIG(wstatus) == SIGTERM) {
-        if ((code = sylvan_handle_breakpoint_at_current_addr(inf, &wstatus)) && code != SYVLANC_BREAKPOINT_NOT_FOUND)
-            return code;
-    } else {
-        if (ptrace(PTRACE_SINGLESTEP, inf->pid, NULL, NULL) < 0)
-            return sylvan_set_errno_msg(SYLVANC_PTRACE_STEP_FAILED, "ptrace single step");
-        if ((code = sylvan_update_inf_status(inf, &wstatus, true)))
-            return code;
-    }
+    if ((code = sylvan_handle_breakpoint_at_current_addr(inf, NULL)) && code != SYVLANC_BREAKPOINT_NOT_FOUND)
+        return code;
+
+    if (!code)
+        return SYLVANC_OK;
     
-    return SYLVANC_OK;
+    if (ptrace(PTRACE_SINGLESTEP, inf->pid, NULL, NULL) < 0)
+        return sylvan_set_errno_msg(SYLVANC_PTRACE_STEP_FAILED, "ptrace single step");
+    return sylvan_update_inf_status(inf, NULL, true);
 }
 /**
  * gets cpu regs
