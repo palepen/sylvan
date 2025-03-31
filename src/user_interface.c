@@ -145,7 +145,6 @@ static int event_hook(void)
     {
         rl_done = 1; 
         rl_replace_line("", 0);
-        rl_crlf();             
         rl_redisplay();
         interrupted = 0;
         return 1;

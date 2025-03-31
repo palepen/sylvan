@@ -382,6 +382,9 @@ int handle_run(char **command, struct sylvan_inferior **inf)
     return 0;
 }
 
+/**
+ * @brief step instruction command
+ */
 int handle_step_inst(char **command, struct sylvan_inferior **inf)
 {
     if (sylvan_stepinst(*inf))
@@ -414,33 +417,29 @@ int handle_file(char **command, struct sylvan_inferior **inf)
     return 0;
 }
 
+/**
+ * @brief attach handler
+ */
 int handle_attach(char **command, struct sylvan_inferior **inf)
 {
     
-    if (command[1] == NULL || strcmp(command[1], "-p") != 0)
+    if (command[1] == NULL)
     {
         fprintf(stderr, "Invalid Arguments\n");
         printf("Usage:\n");
-        printf("   attach -p <pid>\n");
+        printf("   attach <pid>\n");
 
-        return 0;
-    }
-    if (command[2] == NULL)
-    {
-        fprintf(stderr, "No Pid\n");
-        printf("Usage:\n");
-        printf("    attach -p <pid>\n");
         return 0;
     }
 
     char *endptr;
     errno = 0;
-    long pid = strtol(command[2], &endptr, 10);
+    long pid = strtol(command[1], &endptr, 10);
 
     if (errno == ERANGE || pid <= 0 || *endptr != '\0')
     {
-        fprintf(stderr, "Invalid PID: %s\n", command[2]);
-        printf("Usage:\n    add-inferior <filepath>\n    add-inferior -p <pid>\n");
+        fprintf(stderr, "Invalid PID: %s\n", command[1]);
+        printf("Usage:\n    attach <pid>\n");
         return 0;
     }
 
@@ -509,5 +508,53 @@ int handle_set_args(char **command, struct sylvan_inferior **inf)
     printf("Added arguments to inferior: %d\n", (*inf)->id);
 
     free(args);
+    return 0;
+}
+
+int handle_set_reg(char **command, struct sylvan_inferior **inf)
+{
+    if(command[2] == NULL || command[3] == NULL)
+    {
+        fprintf(stderr, "No name or value given\n");
+        printf("Usage:\n    set reg <register name> <value>\n");
+        return 0;
+    }
+    int idx = find_register_by_name(command[2]);
+    if(idx == -1)
+    {
+        fprintf(stderr, "register not found\n");
+        return 0;
+    }    
+    char *endptr;
+    errno = 0;
+    long val = strtol(command[3], &endptr, 10);
+
+    if (errno == ERANGE || val <= 0 || *endptr != '\0')
+    {
+        fprintf(stderr, "Invalid value: %s\n", command[3]);
+        printf("Usage:\n    set reg <value>\n");
+        return 0;
+    }
+    struct user_regs_struct *regs = (struct user_regs_struct *)malloc(sizeof(struct user_regs_struct));
+    
+    if(sylvan_get_regs(*inf, regs))
+    {
+        fprintf(stderr, "%s\n", sylvan_get_last_error());
+        free(regs);
+        return 0;
+    }
+
+
+    memcpy(((uint8_t*)regs + sylvan_registers_info[idx].offset), &val, sizeof(uint64_t));
+
+    if(sylvan_set_regs(*inf, regs))
+    {
+        fprintf(stderr, "%s\n", sylvan_get_last_error());
+        free(regs);
+        return 0;    
+    }
+
+    printf("Set %s to %ld\n", sylvan_registers_info[idx].name, val);
+    free(regs);
     return 0;
 }

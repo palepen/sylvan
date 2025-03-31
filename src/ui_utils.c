@@ -7,8 +7,6 @@
 #include "ui_utils.h"
 
 
-
-
 /**
  * @brief Gets the current terminal width
  * @return Number of columns in terminal, or DEFAULT_TERM_WIDTH if undetectable

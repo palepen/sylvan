@@ -12,3 +12,4 @@ DEFINE_COMMAND(info breakpoints, "Status of specified breakpoints (all user-sett
 DEFINE_COMMAND(info copying, "Conditions for redistributing copies of Sylvan.", handle_info_copying, 108, 1),
 DEFINE_COMMAND(info inferiors, "Print a list of inferiors being managed.", handle_info_inferiors, 109, 1),
 DEFINE_COMMAND(set args, "Set arguments", handle_set_args, 201, 2),
+DEFINE_COMMAND(set reg, "Set a value to register", handle_set_reg,202, 2),

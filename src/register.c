@@ -58,6 +58,9 @@ void print_bottom_separator(int width)
 }
 
 
+/**
+ * @brief print all the registers
+ */
 void print_registers(struct user_regs_struct *regs)
 {
     int width = 80;
@@ -101,3 +104,21 @@ void print_registers(struct user_regs_struct *regs)
     }
 
 }    
+
+/**
+ * @brief get the index of the register with name
+ * @return idx if found and -1 if not
+ */
+int find_register_by_name(char *reg_name)
+{
+    for(int i = 0; sylvan_registers_info[i].name != NULL; i++)
+    {
+        if(strcmp(reg_name, sylvan_registers_info[i].name) == 0)
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
