@@ -1,14 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-#include <limits.h>
 #include <string.h>
 #include <signal.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 
+#include "ui_utils.h"
 #include "user_interface.h"
 #include "handle_command.h"
 
@@ -105,44 +103,6 @@ static void free_command(char **args)
     free(args);
 }
 
-/**
- * @brief Clears the terminal screen
- */
-static void clear_screen(void)
-{
-    printf("\033[2J\033[H");
-}
-
-/**
- * @brief Gets the current terminal width
- * @return Number of columns in terminal, or DEFAULT_TERM_WIDTH if undetectable
- */
-static int get_terminal_width(void)
-{
-    struct winsize w = {0};
-    int fds[] = {STDOUT_FILENO, STDERR_FILENO};
-
-    for (int i = 0; i < 2; i++)
-    {
-        if (isatty(fds[i]) && ioctl(fds[i], TIOCGWINSZ, &w) == 0 && w.ws_col > 0)
-        {
-            return w.ws_col;
-        }
-    }
-
-    const char *env_cols = getenv("COLUMNS");
-    if (env_cols)
-    {
-        char *end;
-        long cols = strtol(env_cols, &end, 10);
-        if (end != env_cols && *end == '\0' && cols > 0 && cols <= INT_MAX)
-        {
-            return (int)cols;
-        }
-    }
-
-    return DEFAULT_TERM_WIDTH;
-}
 
 /**
  * @brief Prints the debugger's heading banner
@@ -186,7 +146,6 @@ static int event_hook(void)
         rl_done = 1; 
         rl_replace_line("", 0);
         rl_crlf();             
-        printf("exit");
         rl_redisplay();
         interrupted = 0;
         return 1;

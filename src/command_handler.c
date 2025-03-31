@@ -11,6 +11,7 @@
 #include "auxv.h"            // For auxv_entry, parse_auxv, etc.
 #include "sylvan/error.h"    // For sylvan_code_t, sylvan_get_last_error
 #include "handle_command.h"
+#include "register.h"
 
 /**
  * @brief Prints available commands or info subcommands
@@ -167,8 +168,16 @@ int handle_info_all_registers(char **command, struct sylvan_inferior **inf)
         (void)command;
         (void)inf;
     }
-
-    printf("yet to implement\n");
+    struct user_regs_struct *regs = (struct user_regs_struct*) malloc(sizeof(struct user_regs_struct));
+    
+    if (sylvan_get_regs(*inf, regs))
+    {
+        fprintf(stderr, "%s\n", sylvan_get_last_error());
+        free(regs);
+        return 0;
+    }
+    print_registers(regs);
+    free(regs);
     return 0;
 }
 
@@ -340,11 +349,6 @@ int handle_info_inferiors(char **command, struct sylvan_inferior **inf)
  */
 int handle_add_inferior(char **command, struct sylvan_inferior **inf)
 {
-    if (!command[1])
-    {
-        printf("No file name provided\n");
-        return 0;
-    }
 
     if (*inf)
     {
@@ -412,7 +416,8 @@ int handle_file(char **command, struct sylvan_inferior **inf)
 
 int handle_attach(char **command, struct sylvan_inferior **inf)
 {
-    if (strcmp(command[1], "-p") != 0)
+    
+    if (command[1] == NULL || strcmp(command[1], "-p") != 0)
     {
         fprintf(stderr, "Invalid Arguments\n");
         printf("Usage:\n");
@@ -484,13 +489,13 @@ int handle_set_args(char **command, struct sylvan_inferior **inf)
         return 0;
     }
 
-    args[0] = '\0'; 
+    args[0] = '\0';
 
     for (int i = 0; i < arg_count; i++)
     {
         if (i > 0)
         {
-            strcat(args, " "); 
+            strcat(args, " ");
         }
         strcat(args, command[i]);
     }
@@ -502,7 +507,7 @@ int handle_set_args(char **command, struct sylvan_inferior **inf)
         return 0;
     }
     printf("Added arguments to inferior: %d\n", (*inf)->id);
-    
+
     free(args);
     return 0;
 }
