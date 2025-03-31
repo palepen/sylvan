@@ -1,0 +1,7 @@
+#ifndef SYLVAN_SYLVAN_H
+#define SYLVAN_SYLVAN_H
+
+#define SYLVAN_INTERNAL
+
+
+#endif /* SYLVAN_SYLVAN_H */

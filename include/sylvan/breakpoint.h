@@ -10,13 +10,14 @@
 struct sylvan_breakpoint {
     uintptr_t addr;
     uint8_t og_byte;
-    bool is_enabled;
+    bool is_enabled_log;
+    bool is_enabled_phy;
 };
 
 struct sylvan_inferior;
 
-sylvan_code_t sylvan_breakpoint_enable_addr(struct sylvan_inferior *inf, uintptr_t addr);
-sylvan_code_t sylvan_breakpoint_disable_addr(struct sylvan_inferior *inf, uintptr_t addr);
+sylvan_code_t sylvan_breakpoint_enable(struct sylvan_inferior *inf, uintptr_t addr);
+sylvan_code_t sylvan_breakpoint_disable(struct sylvan_inferior *inf, uintptr_t addr);
 
 sylvan_code_t sylvan_breakpoint_set(struct sylvan_inferior *inf, uintptr_t addr);
 sylvan_code_t sylvan_breakpoint_unset(struct sylvan_inferior *inf, uintptr_t addr);

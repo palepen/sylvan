@@ -261,6 +261,12 @@ sylvan_code_t sylvan_attach(struct sylvan_inferior *inf, pid_t pid) {
     inf->is_attached = true;
     inf->realpath = path;
 
+    if ((code = sylvan_breakpoint_reset_phybp(inf)))
+        return code;
+
+    if ((code = sylvan_breakpoint_setall_phybp(inf)))
+        return code;
+
     return SYLVANC_OK;
 }
 
@@ -279,6 +285,9 @@ sylvan_code_t sylvan_detach(struct sylvan_inferior *inf) {
         return SYLVANC_OK;
 
     if (code)
+        return code;
+
+    if ((code = sylvan_breakpoint_unsetall_phybp(inf)))
         return code;
 
     if (ptrace(PTRACE_DETACH, inf->pid, NULL, NULL) < 0)
@@ -358,7 +367,6 @@ static void handle_child(struct sylvan_inferior *inf, int fd[2]) {
  */
 static sylvan_code_t handle_parent(pid_t pid, struct sylvan_inferior *inf, int fd[2]) {
 
-
     if (close(fd[1]) < 0)
         return sylvan_set_errno_msg(SYLVANC_SYSTEM_ERROR, "close pipe");
 
@@ -407,6 +415,13 @@ static sylvan_code_t handle_parent(pid_t pid, struct sylvan_inferior *inf, int f
     sylvan_update_wait_status(status, inf);
     inf->pid = pid;
     inf->is_attached = false;
+
+    sylvan_code_t code;
+    if ((code = sylvan_breakpoint_reset_phybp(inf)))
+        return code;
+
+    if ((code = sylvan_breakpoint_setall_phybp(inf)))
+        return code;
 
     return sylvan_continue(inf);
 }
@@ -459,7 +474,7 @@ static sylvan_code_t sylvan_handle_breakpoint_at_current_addr(struct sylvan_infe
     if (sylvan_breakpoint_find_by_addr(inf, regs.rip, &breakpoint) == SYVLANC_BREAKPOINT_NOT_FOUND)
         return SYVLANC_BREAKPOINT_NOT_FOUND;
 
-    if ((code = sylvan_breakpoint_disable_bp(inf, breakpoint)))
+    if ((code = sylvan_breakpoint_disable_ptr(inf, breakpoint)))
         return code;
 
     if (ptrace(PTRACE_SINGLESTEP, inf->pid, NULL, NULL) < 0)
@@ -468,7 +483,7 @@ static sylvan_code_t sylvan_handle_breakpoint_at_current_addr(struct sylvan_infe
     if ((code = sylvan_update_inf_status(inf, wstatus, true)))
         return code;
 
-    if ((code = sylvan_breakpoint_enable_bp(inf, breakpoint)))
+    if ((code = sylvan_breakpoint_enable_ptr(inf, breakpoint)))
         return code;
     return SYLVANC_OK;
 }
