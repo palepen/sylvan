@@ -5,7 +5,7 @@
 #include <sys/wait.h>
 #include <signal.h>
 
-#include "handle_command.h"
+#include "command_lookup.h"
 #include "sylvan/inferior.h"
 #include "command_handler.h"
 

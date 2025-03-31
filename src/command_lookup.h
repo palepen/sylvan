@@ -1,5 +1,5 @@
-#ifndef HANDLE_COMMAND_H
-#define HANDLE_COMMAND_H
+#ifndef COMMAND_LOOKUP_H
+#define COMMAND_LOOKUP_H
 #include "user_interface.h"
 #include "sylvan/inferior.h"
 

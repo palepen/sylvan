@@ -8,7 +8,7 @@
 
 #include "ui_utils.h"
 #include "user_interface.h"
-#include "handle_command.h"
+#include "command_lookup.h"
 
 extern volatile sig_atomic_t interrupted;
 
