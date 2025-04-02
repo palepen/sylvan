@@ -15,7 +15,7 @@
 // Command data structures
 struct sylvan_command_data sylvan_commands[] = {
 #define DEFINE_COMMAND(name, desc, handler, id) \
-    {#name, desc, handler, "handle_" #name, 0, SYLVAN_STANDARD_COMMAND, id}
+    {#name, desc, handler, #handler, 0, SYLVAN_STANDARD_COMMAND, id}
 
 #include "details/standard_commands.h"
 #undef DEFINE_COMMAND

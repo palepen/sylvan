@@ -24,6 +24,9 @@ int handle_attach(char **command, struct sylvan_inferior **inf);
 int handle_set(char **command, struct sylvan_inferior **inf);
 int handle_set_args(char **command, struct sylvan_inferior **inf);
 int handle_set_reg(char **command, struct sylvan_inferior **inf);
-
+int handle_breakpoint_set(char **command, struct sylvan_inferior **inf);
+int handle_disable_breakpoint(char **command, struct sylvan_inferior **inf);
+int handle_enable_breakpoint(char **command, struct sylvan_inferior **inf);
+int handle_delete_breakpoint(char **command, struct sylvan_inferior **inf);
 
 #endif
