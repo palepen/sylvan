@@ -13,7 +13,7 @@ enum sylvan_register_id
 {
 
     #define DEFINE_REGISTER(name, dwarf_id, size, offset, type, format) name
-    #include "details/register_info.h"
+    #include "defs/register_info.h"
     #undef DEFINE_REGISTER
     NUM_REGISTERS
 };

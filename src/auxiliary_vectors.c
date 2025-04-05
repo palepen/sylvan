@@ -5,11 +5,11 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "auxv.h"
+#include "auxiliary_vectors.h"
 
 #define DEFINE_AUXV_TYPE(type, name, desc) {type, name, desc}
 static const struct auxv_name auxv_names[] = {
-#include "details/auxv_types.h"
+#include "defs/auxv_types.h"
     {-1, NULL, NULL} // Sentinel
 };
 #undef DEFINE_AUXV_TYPE

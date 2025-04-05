@@ -8,7 +8,7 @@
 
 #include "ui_utils.h"
 #include "user_interface.h"
-#include "command_lookup.h"
+#include "command_registry.h"
 
 extern volatile sig_atomic_t interrupted;
 
@@ -202,6 +202,7 @@ extern void interface_loop(struct sylvan_inferior **inf)
         free_command(line);
     }
 
+    free_alias_table();
     clear_history();
     rl_clear_history();
     rl_free_line_state();

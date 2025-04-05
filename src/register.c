@@ -14,7 +14,7 @@ const struct sylvan_register sylvan_registers_info[] =
 {   
     #define DEFINE_REGISTER(name, dwarf_id, size, offset, type, format) \
         {name, #name, dwarf_id, size, offset, type, format}
-    #include "details/register_info.h"
+    #include "defs/register_info.h"
     #undef DEFINE_REGISTER
     {0, NULL, 0, 0, 0, 0, 0}
 };

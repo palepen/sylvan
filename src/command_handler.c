@@ -1,61 +1,65 @@
-#include <stdio.h>  // For printf, fprintf
-#include <stdlib.h> // For free
-#include <unistd.h> // For close
-#include <elf.h>    // For ELF types (Elf64_Ehdr, etc.)
-#include <fcntl.h>  // For open
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <elf.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <string.h>
 
-#include "sylvan/inferior.h" // For sylvan_inferior, sylvan_run, etc.
-#include "command_handler.h" // For sylvan_commands, sylvan_info_commands
-#include "auxv.h"            // For auxv_entry, parse_auxv, etc.
-#include "sylvan/error.h"    // For sylvan_code_t, sylvan_get_last_error
-#include "command_lookup.h"
+#include "sylvan/inferior.h"
+#include "command_handler.h"
+#include "command_registry.h"
+#include "auxiliary_vectors.h"
+#include "sylvan/error.h"
 #include "register.h"
 
 /**
  * @brief Prints available commands or info subcommands
- * @param tp Type of commands to print (standard or info)
- * @param print_all 1 - prints all the programs
+ * @param tp Type of commands to print (standard, info, or set)
+ * @param print_all 1 - prints all the programs, 0 - prints only the specified type
  */
 static void print_commands(enum sylvan_command_type tp, int print_all)
 {
-    size_t i = 0;
-    switch (tp)
+    struct sylvan_command_data *cmd, *tmp;
+
+    int print_standard = (tp == SYLVAN_STANDARD_COMMAND || print_all);
+    int print_info = (tp == SYLVAN_INFO_COMMAND || print_all);
+    int print_set = (tp == SYLVAN_SET_COMMAND || print_all);
+
+    if (print_standard)
     {
-    case SYLVAN_STANDARD_COMMAND:
         printf("Commands:\n");
-        while (sylvan_commands[i].name)
+        HASH_ITER(hh, command_hash, cmd, tmp)
         {
-            printf("    %s  - %s\n", sylvan_commands[i].name, sylvan_commands[i].desc);
-            i++;
+            if (cmd->type == SYLVAN_STANDARD_COMMAND)
+            {
+                printf("    %s  - %s\n", cmd->name, cmd->description);
+            }
         }
-        if (print_all == 0)
-            break;
+    }
 
-    case SYLVAN_INFO_COMMAND:
+    if (print_info)
+    {
         printf("Info Commands:\n");
-        while (sylvan_sub_commands[i].name)
+        HASH_ITER(hh, command_hash, cmd, tmp)
         {
-            if (sylvan_sub_commands[i].command_type == SYLVAN_INFO_COMMAND)
-                printf("    %s  - %s\n", sylvan_sub_commands[i].name, sylvan_sub_commands[i].desc);
-            i++;
+            if (cmd->type == SYLVAN_INFO_COMMAND)
+            {
+                printf("    %s  - %s\n", cmd->name, cmd->description);
+            }
         }
-        if (print_all == 0)
-            break;
+    }
 
-    case SYLVAN_SET_COMMAND:
+    if (print_set)
+    {
         printf("Set Commands:\n");
-        while (sylvan_sub_commands[i].name)
+        HASH_ITER(hh, command_hash, cmd, tmp)
         {
-            if (sylvan_sub_commands[i].command_type == SYLVAN_SET_COMMAND)
-                printf("    %s  - %s\n", sylvan_sub_commands[i].name, sylvan_sub_commands[i].desc);
-            i++;
+            if (cmd->type == SYLVAN_SET_COMMAND)
+            {
+                printf("    %s  - %s\n", cmd->name, cmd->description);
+            }
         }
-        if (print_all == 0)
-            break;
-    default:
-        break;
     }
 }
 
@@ -66,13 +70,15 @@ static void print_commands(enum sylvan_command_type tp, int print_all)
  */
 int handle_help(char **command, struct sylvan_inferior **inf)
 {
-    if (inf && command)
+    if (inf)
     {
-        (void)command;
         (void)inf;
     }
 
-    print_commands(SYLVAN_STANDARD_COMMAND, 0);
+    if (command[1] && (strcmp(command[1], "-a") == 0 || strcmp(command[1], "--all") == 0))
+        print_commands(SYLVAN_STANDARD_COMMAND, 1);
+    else
+        print_commands(SYLVAN_STANDARD_COMMAND, 0);
     return 0;
 }
 
@@ -126,13 +132,13 @@ int handle_continue(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'info' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 to success and 2 to move to sub_command
  */
 int handle_info(char **command, struct sylvan_inferior **inf)
 {
     if (command[1])
     {
-        return 2;
+        fprintf(stderr, "Invalid Arguments\n");
+        return 0;
     }
     (void)inf;
     print_commands(SYLVAN_INFO_COMMAND, 0);
@@ -161,13 +167,14 @@ int handle_info_address(char **command, struct sylvan_inferior **inf)
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
  */
-int handle_info_all_registers(char **command, struct sylvan_inferior **inf)
+int handle_info_registers(char **command, struct sylvan_inferior **inf)
 {
-    if (inf && command)
+    if (command[1])
     {
-        (void)command;
-        (void)inf;
+        fprintf(stderr, "Invalid Arguments\n");
+        return 0;
     }
+
     struct user_regs_struct *regs = (struct user_regs_struct *)malloc(sizeof(struct user_regs_struct));
 
     if (sylvan_get_regs(*inf, regs))
@@ -188,11 +195,15 @@ int handle_info_all_registers(char **command, struct sylvan_inferior **inf)
  */
 int handle_info_args(char **command, struct sylvan_inferior **inf)
 {
+    if (command[1])
+    {
+        fprintf(stderr, "Invalid Arguments\n");
+        return 0;
+    }
     if (!inf || !(*inf))
     {
         fprintf(stderr, "Null inferior\n");
     }
-    (void)command;
 
     printf("Arguments: %s\n", (*inf)->args);
     return 0;
@@ -221,7 +232,11 @@ int handle_info_auto_load(char **command, struct sylvan_inferior **inf)
  */
 int handle_info_auxv(char **command, struct sylvan_inferior **inf)
 {
-    (void)command;
+    if (command[1])
+    {
+        fprintf(stderr, "Invalid Arguments\n");
+        return 0;
+    }
 
     if (!inf || !(*inf))
     {
@@ -294,9 +309,10 @@ int handle_info_bookmark(char **command, struct sylvan_inferior **inf)
  */
 int handle_info_breakpoints(char **command, struct sylvan_inferior **inf)
 {
-    if (inf && command)
+    if (command[1])
     {
-        (void)command;
+        fprintf(stderr, "Invalid Arguments\n");
+        return 0;
     }
 
     struct sylvan_inferior *curr_inf = *inf;
@@ -331,8 +347,13 @@ int handle_info_copying(char **command, struct sylvan_inferior **inf)
  */
 int handle_info_inferiors(char **command, struct sylvan_inferior **inf)
 {
+    if (command[1])
+    {
+        fprintf(stderr, "Invalid Arguments\n");
+        return 0;
+    }
+
     struct sylvan_inferior *curr_inf = *inf;
-    (void)command;
     if (!inf || !curr_inf)
     {
         return 0;
@@ -353,7 +374,12 @@ int handle_info_inferiors(char **command, struct sylvan_inferior **inf)
  */
 int handle_add_inferior(char **command, struct sylvan_inferior **inf)
 {
-    (void)command;
+    if (command[1])
+    {
+        fprintf(stderr, "Invalid Arguments\n");
+        return 0;
+    }
+
     if (inf)
     {
         fprintf(stderr, "Null Inferior Pointer\n");
@@ -381,6 +407,12 @@ int handle_add_inferior(char **command, struct sylvan_inferior **inf)
  */
 int handle_run(char **command, struct sylvan_inferior **inf)
 {
+    if (command[1])
+    {
+        fprintf(stderr, "Invalid Arguments\n");
+        return 0;
+    }
+
     if (inf)
     {
         fprintf(stderr, "Null Inferior Pointer\n");
@@ -391,7 +423,7 @@ int handle_run(char **command, struct sylvan_inferior **inf)
     {
         fprintf(stderr, "%s\n", sylvan_get_last_error());
     }
-    (void)command;
+
     return 0;
 }
 
@@ -400,6 +432,12 @@ int handle_run(char **command, struct sylvan_inferior **inf)
  */
 int handle_step_inst(char **command, struct sylvan_inferior **inf)
 {
+    if (command[1])
+    {
+        fprintf(stderr, "Invalid Arguments\n");
+        return 0;
+    }
+
     if (inf)
     {
         fprintf(stderr, "Null Inferior Pointer\n");
@@ -410,19 +448,25 @@ int handle_step_inst(char **command, struct sylvan_inferior **inf)
         fprintf(stderr, "%s\n", sylvan_get_last_error());
         return 0;
     }
-    (void)command;
+
     printf("Single Instruction executed\n");
     return 0;
 }
 
 int handle_file(char **command, struct sylvan_inferior **inf)
 {
-
     if (command[1] == NULL)
     {
         fprintf(stderr, "No filename provided\n");
         return 0;
     }
+
+    if (command[2])
+    {
+        fprintf(stderr, "Invalid Arguments\n");
+        return 0;
+    }
+
     const char *filepath = command[1];
 
     if (sylvan_set_filepath(*inf, filepath))
@@ -447,6 +491,12 @@ int handle_attach(char **command, struct sylvan_inferior **inf)
         printf("Usage:\n");
         printf("   attach <pid>\n");
 
+        return 0;
+    }
+
+    if (command[2])
+    {
+        fprintf(stderr, "Invalid Arguments\n");
         return 0;
     }
 
@@ -480,8 +530,10 @@ int handle_set(char **command, struct sylvan_inferior **inf)
 {
     if (command[1])
     {
-        return 2;
+        fprintf(stderr, "Invalid Arguments\n");
+        return 0;
     }
+
     (void)inf;
     print_commands(SYLVAN_SET_COMMAND, 0);
     return 0;
@@ -555,6 +607,13 @@ int handle_set_reg(char **command, struct sylvan_inferior **inf)
         printf("Usage:\n    set reg <register name> <value>\n");
         return 0;
     }
+
+    if (command[4])
+    {
+        fprintf(stderr, "Invalid Arguments\n");
+        return 0;
+    }
+
     int idx = find_register_by_name(command[2]);
     if (idx == -1)
     {
@@ -610,6 +669,12 @@ int handle_breakpoint_set(char **command, struct sylvan_inferior **inf)
         fprintf(stderr, "address missing\n");
         printf("Usage:\n    breakpoint <address>\n");
 
+        return 0;
+    }
+
+    if (command[2])
+    {
+        fprintf(stderr, "Invalid Arguments\n");
         return 0;
     }
 
@@ -802,7 +867,6 @@ int handle_delete_breakpoint(char **command, struct sylvan_inferior **inf)
             }
         }
 
-
         printf("breakpoint at addr 0x%lx  is deleted\n", (*inf)->breakpoints[id].addr);
         return 0;
     }
@@ -833,3 +897,46 @@ int handle_delete_breakpoint(char **command, struct sylvan_inferior **inf)
     return 0;
 }
 
+/**
+ * @brief Handles the 'set alias' command to create a new alias for an existing command
+ * @param[in] command The command array (command[1] is the original command, command[2] is the alias name)
+ * @param[in] inf The sylvan_inferior being debugged (unused in this function)
+ * @return 1 on success, 0 on failure
+ */
+int handle_set_alias(char **command, struct sylvan_inferior **inf)
+{
+    if (command[1] == NULL || command[2] == NULL)
+    {
+        fprintf(stderr, "Invalid arguments: Usage: set alias <command> <alias>\n");
+        return 1;
+    }
+
+    int alias_id = HASH_COUNT(alias_table) + 1;
+    if (insert_alias(command[2], command[3], alias_id, 'u'))
+    {
+        fprintf(stderr, "Failed to add alias\n");
+        return 1;
+    }
+
+    printf("Alias added successfully: '%s' -> '%s'\n", command[2], command[3]);
+    return 0;
+}
+
+int handle_info_alias(char **command, struct sylvan_inferior **inf)
+{
+    if (command[1])
+    {
+        fprintf(stderr, "Invalid arguments\n");
+        return 0;
+    }
+    struct sylvan_command_alias *cmd_alias, *tmp;
+
+    printf("Command Name         Alias   \n");
+    printf("-------------------- -------\n");
+
+    HASH_ITER(hh, alias_table, cmd_alias, tmp)
+    {
+        printf("%-20s %-8s\n", cmd_alias->name, cmd_alias->org_cmd);
+    }
+    return 0;
+}
