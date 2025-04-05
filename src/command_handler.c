@@ -12,6 +12,7 @@
 #include "auxiliary_vectors.h"
 #include "sylvan/error.h"
 #include "register.h"
+#include "ui_utils.h"
 
 /**
  * @brief Prints available commands or info subcommands
@@ -315,12 +316,50 @@ int handle_info_breakpoints(char **command, struct sylvan_inferior **inf)
         return 0;
     }
 
+    if (!inf)
+    {
+        fprintf(stderr, "Null Inferior Pointer\n");
+    }
     struct sylvan_inferior *curr_inf = *inf;
-    printf("Num     Type            Address             Status\n");
-    printf("----    --------        ----------------    ------------\n");
+
+    struct table_col cols[] = {
+        {"NUM", 5, TABLE_COL_INT},
+        {"TYPE", 12, TABLE_COL_STR},
+        {"ADDRESS", 18, TABLE_COL_HEX_LONG},
+        {"STATUS", 10, TABLE_COL_INT}
+    };
+    
+    int col_count = 4;
+
+    struct table_row *rows = NULL, *current = NULL;
     for (int i = 0; i < curr_inf->breakpoint_count; i++)
     {
-        printf("%03d    physical        0x%08lx           %d", i, curr_inf->breakpoints[i].addr, curr_inf->breakpoints[i].is_enabled_phy);
+        struct table_row *new_row = malloc(sizeof(struct table_row));
+        void *row_data = malloc(sizeof(int) + sizeof(char *) + sizeof(unsigned long) + sizeof(int));
+        int *int_data = (int *)row_data;
+        int_data[0] = i;
+        *(const char **)(row_data + sizeof(int)) = "physical";
+        *(unsigned long *)(row_data + sizeof(int) + sizeof(char *)) = curr_inf->breakpoints[i].addr;
+        int_data[3] = curr_inf->breakpoints[i].is_enabled_phy;
+        new_row->data = row_data;
+        new_row->next = NULL;
+
+        if (!rows)
+            rows = new_row;
+        else
+            current->next = new_row;
+        current = new_row;
+    }
+
+    print_table("BREAKPOINTS", cols, col_count, rows, curr_inf->breakpoint_count);
+
+    current = rows;
+    while (current)
+    {
+        struct table_row *next = current->next;
+        free((void *)current->data);
+        free(current);
+        current = next;
     }
     return 0;
 }
@@ -413,7 +452,7 @@ int handle_run(char **command, struct sylvan_inferior **inf)
         return 0;
     }
 
-    if (inf)
+    if (!inf)
     {
         fprintf(stderr, "Null Inferior Pointer\n");
         return 0;
@@ -912,6 +951,7 @@ int handle_set_alias(char **command, struct sylvan_inferior **inf)
     }
 
     int alias_id = HASH_COUNT(alias_table) + 1;
+
     if (insert_alias(command[2], command[3], alias_id, 'u'))
     {
         fprintf(stderr, "Failed to add alias\n");

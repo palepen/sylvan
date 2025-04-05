@@ -58,7 +58,7 @@ int insert_alias(const char *name, const char *org_cmd, int id, char type)
         return 1;
     }
 
-    struct sylvan_command_data *orig_cmd = lookup_command(orig_cmd);
+    struct sylvan_command_data *orig_cmd = lookup_command(org_cmd);
     if (!orig_cmd)
     {
         fprintf(stderr, "Invalid command: '%s' not found\n", orig_cmd);

@@ -110,7 +110,8 @@ static void free_command(char **args)
 static void print_heading(void)
 {
     clear_screen();
-    int width = get_terminal_width();
+    struct term_size t = get_terminal_size();
+    int width = t.width;
     const char *title = "SYLVAN DEBUGGER v1.0";
     int title_len = strlen(title);
     int left_pad = (width - title_len) / 2;
