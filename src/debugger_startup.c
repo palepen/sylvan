@@ -3,14 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 
 #include "debugger_startup.h"
 #include "sylvan/inferior.h"
 #include "cmd.h"
 #include "user_interface.h"
-
-extern volatile sig_atomic_t interrupted = 0; 
 
 void cmd_args_init(struct cmd_args *args)
 {
@@ -114,22 +111,12 @@ void error(const char *msg)
 }
 
 
-static void handle_sigint(int sig)
-{
-    (void)sig;
-    interrupted = 1;
-}
 
 int debugger_main(int argc, char **argv)
 {
     struct cmd_args cmd_args = {0};
     struct sylvan_inferior *inf = NULL;
 
-    if (signal(SIGINT, handle_sigint) == SIG_ERR)
-    {
-        perror("Failed to set SIGINT handler");
-        return EXIT_FAILURE;
-    }
 
     parse_args(argc, argv, &cmd_args);
 

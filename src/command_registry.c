@@ -61,7 +61,7 @@ int insert_alias(const char *name, const char *org_cmd, int id, char type)
     struct sylvan_command_data *orig_cmd = lookup_command(org_cmd);
     if (!orig_cmd)
     {
-        fprintf(stderr, "Invalid command: '%s' not found\n", orig_cmd);
+        fprintf(stderr, "Invalid command: %s not found\n", org_cmd);
         return 1;
     }
 
@@ -173,7 +173,6 @@ int handle_command(char **command, struct sylvan_inferior **inf)
     }
 
     struct sylvan_command_data *cmd = lookup_command(command[0]);
-    int res;
     if (cmd && cmd->handler)
     {
         return cmd->handler(command, inf);

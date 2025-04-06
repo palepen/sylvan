@@ -944,6 +944,7 @@ int handle_delete_breakpoint(char **command, struct sylvan_inferior **inf)
  */
 int handle_set_alias(char **command, struct sylvan_inferior **inf)
 {
+    (void)inf;
     if (command[1] == NULL || command[2] == NULL)
     {
         fprintf(stderr, "Invalid arguments: Usage: set alias <command> <alias>\n");
@@ -964,6 +965,7 @@ int handle_set_alias(char **command, struct sylvan_inferior **inf)
 
 int handle_info_alias(char **command, struct sylvan_inferior **inf)
 {
+    (void)inf;
     if (command[1])
     {
         fprintf(stderr, "Invalid arguments\n");

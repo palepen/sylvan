@@ -82,6 +82,9 @@ static int prompt_for_continue(int current_row, int total_rows)
         return 0;
     while (c != '\n' && c != EOF)
         c = getchar();
+    
+    printf("\033[1A\033[2K");
+    fflush(stdout);
     return 1;
 }
 
@@ -92,7 +95,7 @@ void print_table(const char *title, struct table_col *cols, int col_count,
         return;
 
     struct term_size term = get_terminal_size();
-    int page_size = term.height - 4; // Reserve for title, headers, prompt
+    int page_size = term.height - 12; // Reserve for title, headers, prompt
     int total_width = 0;
     int term_width = term.width;
     int widths[col_count];
@@ -100,10 +103,10 @@ void print_table(const char *title, struct table_col *cols, int col_count,
     // Calculate column widths (use specified width or header length, whichever is larger)
     for (int i = 0; i < col_count; i++)
     {
-        widths[i] = cols[i].width > (int)strlen(cols[i].header) ? cols[i].width : strlen(cols[i].header);
+        widths[i] = cols[i].width > (int)strlen(cols[i].header) ? (int)cols[i].width : (int)strlen(cols[i].header);
         total_width += widths[i] + 1; // +1 for separator
     }
-    
+
     total_width += 1; // Left border
     if (total_width > term_width)
     {
@@ -136,49 +139,48 @@ void print_table(const char *title, struct table_col *cols, int col_count,
     // Rows
     struct table_row *row = rows;
     int rows_printed = 0;
-    for (int r = 0; r < row_count && row; r++) {
+    for (int r = 0; r < row_count && row; r++)
+    {
         printf("%s|%s", BORDER_COLOR, WHITE);
         const char *data = (const char *)row->data;
         char buffer[32];
-        for (int i = 0; i < col_count; i++) {
-            switch (cols[i].format) {
-                case TABLE_COL_STR:
-                    printf(" %s%-*s%s", GREEN, widths[i] - 1, *(const char **)data, RESET);
-                    data += sizeof(char *);
-                    break;
-                case TABLE_COL_INT:
-                    printf(" %-*d", widths[i] - 1, *(int *)data);
-                    data += sizeof(int);
-                    break;
-                case TABLE_COL_HEX:
-                    snprintf(buffer, sizeof(buffer), "0x%x", *(unsigned int *)data);
-                    printf(" %-*s", widths[i] - 1, buffer);
-                    data += sizeof(unsigned int);
-                    break;
-                case TABLE_COL_HEX_LONG:
-                    snprintf(buffer, sizeof(buffer), "0x%lx", *(unsigned long *)data);
-                    printf(" %-*s", widths[i] - 1, buffer);
-                    data += sizeof(unsigned long);
-                    break;
+        for (int i = 0; i < col_count; i++)
+        {
+            switch (cols[i].format)
+            {
+            case TABLE_COL_STR:
+                printf(" %s%-*s%s", GREEN, widths[i] - 1, *(const char **)data, RESET);
+                data += sizeof(char *);
+                break;
+            case TABLE_COL_INT:
+                printf(" %-*d", widths[i] - 1, *(int *)data);
+                data += sizeof(int);
+                break;
+            case TABLE_COL_HEX:
+                snprintf(buffer, sizeof(buffer), "0x%x", *(unsigned int *)data);
+                printf(" %-*s", widths[i] - 1, buffer);
+                data += sizeof(unsigned int);
+                break;
+            case TABLE_COL_HEX_LONG:
+                snprintf(buffer, sizeof(buffer), "0x%lx", *(unsigned long *)data);
+                printf(" %-*s", widths[i] - 1, buffer);
+                data += sizeof(unsigned long);
+                break;
             }
-            if (i < col_count - 1) printf("%s|%s", BORDER_COLOR, WHITE);
+            if (i < col_count - 1)
+                printf("%s|%s", BORDER_COLOR, WHITE);
         }
         printf("%s|%s\n", BORDER_COLOR, RESET);
         rows_printed++;
 
-        if (rows_printed % page_size == 0 && r < row_count - 1) {
-            if (!prompt_for_continue(rows_printed, row_count)) break;
-            clear_screen();
-            printf("\n %s%s%s%s \n", BOLD, YELLOW, title, RESET);
+        if (rows_printed % page_size == 0 && r < row_count - 1)
+        {
+            if (!prompt_for_continue(rows_printed, row_count))
+                break;
             print_table_line(widths, col_count, '+', '+', '+');
-            printf("%s|", BORDER_COLOR);
-            for (int i = 0; i < col_count; i++) {
-                printf(" %s%-*s%s", MAGENTA, widths[i] - 1, cols[i].header, RESET);
-                if (i < col_count - 1) printf("%s|", BORDER_COLOR);
-            }
-            printf("%s|%s\n", BORDER_COLOR, RESET);
-            print_table_line(widths, col_count, '+', '+', '+');
-        } else if (r < row_count - 1) {
+        }
+        else if (r < row_count - 1)
+        {
             print_table_line(widths, col_count, '+', '+', '+');
         }
         row = row->next;

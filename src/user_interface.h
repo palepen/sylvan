@@ -7,6 +7,6 @@
 #define INITIAL_ARG_COUNT 10
 
 
-extern void interface_loop(struct sylvan_inferior **inf);
+void interface_loop(struct sylvan_inferior **inf);
 
 #endif

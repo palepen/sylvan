@@ -10,7 +10,7 @@
 #include "user_interface.h"
 #include "command_registry.h"
 
-extern volatile sig_atomic_t interrupted;
+sig_atomic_t interrupted;
 
 static char **get_command(const char *prompt)
 {
@@ -31,6 +31,14 @@ static char **get_command(const char *prompt)
     if (input[0] != '\0')
     {
         add_history(input);
+    }
+    else
+    {
+        HIST_ENTRY *last = history_get(history_length);
+        if (last && last->line && last->line[0] != '\0') {
+            free(input);
+            input = strdup(last->line);
+        }
     }
 
     size_t arg_count = 0, arg_size = INITIAL_ARG_COUNT;
@@ -140,6 +148,13 @@ static void print_heading(void)
 }
 
 
+static void handle_sigint(int sig)
+{
+    (void)sig;
+    interrupted = 1;
+}
+
+
 static int event_hook(void)
 {
     if (interrupted)
@@ -163,8 +178,14 @@ static int event_hook(void)
  * @param[in,out] inf A pointer to a struct sylvan_inferior object, which maintains
  *                    state information for the shell.
  */
-extern void interface_loop(struct sylvan_inferior **inf)
+void interface_loop(struct sylvan_inferior **inf)
 {
+
+    if (signal(SIGINT, handle_sigint) == SIG_ERR)
+    {
+        perror("Failed to set SIGINT handler");
+        return;
+    }
 
 
     print_heading();
