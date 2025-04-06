@@ -14,16 +14,16 @@ struct sylvan_command_data *command_hash = NULL;
 struct sylvan_command_alias *alias_table = NULL;
 
 static struct sylvan_command_data static_commands[] = {
-#define DEFINE_COMMAND(name, desc, handler, id) \
-    {#name, desc, handler, #handler, SYLVAN_STANDARD_COMMAND, id, {0}}
+#define DEFINE_COMMAND(name, desc, handler, id, type, usage) \
+    {#name, desc, handler, #handler, type, id, usage, {0}}
 #include "defs/standard_commands.h"
 #undef DEFINE_COMMAND
 
-#define DEFINE_COMMAND(name, desc, handler, id, type) \
-    {#name, desc, handler, #handler, type, id, {0}}
+#define DEFINE_COMMAND(name, desc, handler, id, type, usage) \
+    {#name, desc, handler, #handler, type, id, usage,{0}}
 #include "defs/sub_commands.h"
 #undef DEFINE_COMMAND
-    {NULL, NULL, NULL, NULL, 0, 0, {0}}
+    {NULL, NULL, NULL, NULL, 0, 0,NULL, {0}}
 };
 
 static struct sylvan_command_alias static_aliases[] = {
@@ -79,7 +79,6 @@ int insert_alias(const char *name, const char *org_cmd, int id, char type)
     {
         free(cmd_al->name);
         free(cmd_al->org_cmd);
-        free(cmd_al);
         fprintf(stderr, "Error: Failed to allocate memory for alias strings\n");
         return 1;
     }

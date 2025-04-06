@@ -28,6 +28,7 @@ struct sylvan_command_data
     char *handler_name;
     int type;
     int id;
+    char *usage;
     UT_hash_handle hh;
 };
 

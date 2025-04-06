@@ -32,5 +32,6 @@ int handle_set_alias(char **command, struct sylvan_inferior **inf);
 int handle_info_alias(char **command, struct sylvan_inferior **inf);
 int handle_read_memory(char **command, struct sylvan_inferior **inf);
 int handle_write_memory(char **command, struct sylvan_inferior **inf);
+int handle_disassemble(char **command, struct sylvan_inferior **inf);
 
 #endif

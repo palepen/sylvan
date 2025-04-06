@@ -52,6 +52,9 @@ const char *sylvan_strerror(sylvan_code_t code) {
         case SYLVANC_PTRACE_SETREGS_FAILED:     return "Set registers failed";
         case SYLVANC_PTRACE_PEEKTEXT_FAILED:    return "Could not read from memory";
         case SYLVANC_PTRACE_POKETEXT_FAILED:    return "Could not write to memory";
+        case SYLVANC_PTRACE_PEEKDATA_FAILED:    return "Could not read from memory";
+        case SYLVANC_PTRACE_POKEDATA_FAILED:    return "Could not write to memory";
+        
 
         case SYVLANC_BREAKPOINT_ERROR:          return "Breakpoint error";
         case SYVLANC_BREAKPOINT_ALREADY_EXISTS: return "Breapoint already exists";
