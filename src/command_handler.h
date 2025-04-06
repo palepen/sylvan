@@ -12,7 +12,7 @@ int handle_info_address(char **command, struct sylvan_inferior **inf);
 int handle_info_args(char **command, struct sylvan_inferior **inf);
 int handle_info_auto_load(char **command, struct sylvan_inferior **inf);
 int handle_info_auxv(char **command, struct sylvan_inferior **inf);
-int handle_info_all_registers(char **command, struct sylvan_inferior **inf);
+int handle_info_registers(char **command, struct sylvan_inferior **inf);
 int handle_info_bookmark(char **command, struct sylvan_inferior **inf);
 int handle_info_breakpoints(char **command, struct sylvan_inferior **inf);
 int handle_info_copying(char **command, struct sylvan_inferior **inf);
@@ -23,5 +23,15 @@ int handle_file(char **command, struct sylvan_inferior **inf);
 int handle_attach(char **command, struct sylvan_inferior **inf);
 int handle_set(char **command, struct sylvan_inferior **inf);
 int handle_set_args(char **command, struct sylvan_inferior **inf);
+int handle_set_reg(char **command, struct sylvan_inferior **inf);
+int handle_breakpoint_set(char **command, struct sylvan_inferior **inf);
+int handle_disable_breakpoint(char **command, struct sylvan_inferior **inf);
+int handle_enable_breakpoint(char **command, struct sylvan_inferior **inf);
+int handle_delete_breakpoint(char **command, struct sylvan_inferior **inf);
+int handle_set_alias(char **command, struct sylvan_inferior **inf);
+int handle_info_alias(char **command, struct sylvan_inferior **inf);
+int handle_read_memory(char **command, struct sylvan_inferior **inf);
+int handle_write_memory(char **command, struct sylvan_inferior **inf);
+int handle_disassemble(char **command, struct sylvan_inferior **inf);
 
 #endif

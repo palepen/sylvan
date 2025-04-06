@@ -44,4 +44,7 @@ sylvan_code_t sylvan_set_regs(struct sylvan_inferior *inf, const struct user_reg
 sylvan_code_t sylvan_set_filepath(struct sylvan_inferior *inf, const char *filepath);
 sylvan_code_t sylvan_set_args(struct sylvan_inferior *inf, const char *args);
 
+sylvan_code_t sylvan_get_memory(struct sylvan_inferior *inf, uintptr_t addr, uint64_t *data);
+sylvan_code_t sylvan_set_memory(struct sylvan_inferior *inf, uintptr_t addr, const void *data, size_t size);
+
 #endif /* SYLVAN_INCLUDE_SYLVAN_INFERIOR_H */

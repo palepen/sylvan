@@ -44,6 +44,8 @@ typedef enum sylvan_code_t {
     SYLVANC_PTRACE_SETREGS_FAILED          ,    /* could not set regs */
     SYLVANC_PTRACE_PEEKTEXT_FAILED         ,    /* could not read from memory */
     SYLVANC_PTRACE_POKETEXT_FAILED         ,    /* could not write to memory */
+    SYLVANC_PTRACE_PEEKDATA_FAILED         ,    /* could not read from memory */
+    SYLVANC_PTRACE_POKEDATA_FAILED         ,    /* could not write to memory */
 
     /* breakpoint errors */
     SYVLANC_BREAKPOINT_ERROR        = 0x500,

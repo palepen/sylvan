@@ -1,18 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-#include <limits.h>
 #include <string.h>
 #include <signal.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 
+#include "ui_utils.h"
 #include "user_interface.h"
-#include "handle_command.h"
+#include "command_registry.h"
 
-extern volatile sig_atomic_t interrupted;
+sig_atomic_t interrupted;
 
 static char **get_command(const char *prompt)
 {
@@ -26,6 +24,7 @@ static char **get_command(const char *prompt)
 
     if (interrupted)
     {
+        interrupted = 0;
         free(input);
         return NULL;
     }
@@ -33,6 +32,15 @@ static char **get_command(const char *prompt)
     if (input[0] != '\0')
     {
         add_history(input);
+    }
+    else
+    {
+        HIST_ENTRY *last = history_get(history_length);
+        if (last && last->line && last->line[0] != '\0')
+        {
+            free(input);
+            input = strdup(last->line);
+        }
     }
 
     size_t arg_count = 0, arg_size = INITIAL_ARG_COUNT;
@@ -106,51 +114,13 @@ static void free_command(char **args)
 }
 
 /**
- * @brief Clears the terminal screen
- */
-static void clear_screen(void)
-{
-    printf("\033[2J\033[H");
-}
-
-/**
- * @brief Gets the current terminal width
- * @return Number of columns in terminal, or DEFAULT_TERM_WIDTH if undetectable
- */
-static int get_terminal_width(void)
-{
-    struct winsize w = {0};
-    int fds[] = {STDOUT_FILENO, STDERR_FILENO};
-
-    for (int i = 0; i < 2; i++)
-    {
-        if (isatty(fds[i]) && ioctl(fds[i], TIOCGWINSZ, &w) == 0 && w.ws_col > 0)
-        {
-            return w.ws_col;
-        }
-    }
-
-    const char *env_cols = getenv("COLUMNS");
-    if (env_cols)
-    {
-        char *end;
-        long cols = strtol(env_cols, &end, 10);
-        if (end != env_cols && *end == '\0' && cols > 0 && cols <= INT_MAX)
-        {
-            return (int)cols;
-        }
-    }
-
-    return DEFAULT_TERM_WIDTH;
-}
-
-/**
  * @brief Prints the debugger's heading banner
  */
 static void print_heading(void)
 {
     clear_screen();
-    int width = get_terminal_width();
+    struct term_size t = get_terminal_size();
+    int width = t.width;
     const char *title = "SYLVAN DEBUGGER v1.0";
     int title_len = strlen(title);
     int left_pad = (width - title_len) / 2;
@@ -178,17 +148,19 @@ static void print_heading(void)
     printf("╝%s\n\n", RESET);
 }
 
+static void handle_sigint(int sig)
+{
+    (void)sig;
+    interrupted = 1;
+}
 
 static int event_hook(void)
 {
     if (interrupted)
     {
-        rl_done = 1; 
+        rl_done = 1;
         rl_replace_line("", 0);
-        rl_crlf();             
-        printf("exit");
         rl_redisplay();
-        interrupted = 0;
         return 1;
     }
     return 0;
@@ -204,9 +176,14 @@ static int event_hook(void)
  * @param[in,out] inf A pointer to a struct sylvan_inferior object, which maintains
  *                    state information for the shell.
  */
-extern void interface_loop(struct sylvan_inferior **inf)
+void interface_loop(struct sylvan_inferior **inf)
 {
 
+    if (signal(SIGINT, handle_sigint) == SIG_ERR)
+    {
+        perror("Failed to set SIGINT handler");
+        return;
+    }
 
     print_heading();
     init_commands();
@@ -244,6 +221,7 @@ extern void interface_loop(struct sylvan_inferior **inf)
         free_command(line);
     }
 
+    free_alias_table();
     clear_history();
     rl_clear_history();
     rl_free_line_state();
