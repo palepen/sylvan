@@ -30,6 +30,7 @@ int handle_enable_breakpoint(char **command, struct sylvan_inferior **inf);
 int handle_delete_breakpoint(char **command, struct sylvan_inferior **inf);
 int handle_set_alias(char **command, struct sylvan_inferior **inf);
 int handle_info_alias(char **command, struct sylvan_inferior **inf);
-
+int handle_read_memory(char **command, struct sylvan_inferior **inf);
+int handle_write_memory(char **command, struct sylvan_inferior **inf);
 
 #endif

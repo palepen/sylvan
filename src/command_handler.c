@@ -326,9 +326,8 @@ int handle_info_breakpoints(char **command, struct sylvan_inferior **inf)
         {"NUM", 5, TABLE_COL_INT},
         {"TYPE", 12, TABLE_COL_STR},
         {"ADDRESS", 18, TABLE_COL_HEX_LONG},
-        {"STATUS", 10, TABLE_COL_INT}
-    };
-    
+        {"STATUS", 10, TABLE_COL_INT}};
+
     int col_count = 4;
 
     struct table_row *rows = NULL, *current = NULL;
@@ -338,7 +337,7 @@ int handle_info_breakpoints(char **command, struct sylvan_inferior **inf)
         void *row_data = malloc(sizeof(int) + sizeof(char *) + sizeof(unsigned long) + sizeof(int));
         int *int_data = (int *)row_data;
         int_data[0] = i;
-        *(const char **)(row_data + sizeof(int)) = "physical";
+        *(const char **)(row_data + sizeof(int)) = "software";
         *(unsigned long *)(row_data + sizeof(int) + sizeof(char *)) = curr_inf->breakpoints[i].addr;
         int_data[3] = curr_inf->breakpoints[i].is_enabled_phy;
         new_row->data = row_data;
@@ -719,7 +718,7 @@ int handle_breakpoint_set(char **command, struct sylvan_inferior **inf)
 
     char *endptr;
     errno = 0;
-    uintptr_t addr = strtol(command[1], &endptr, 10);
+    uintptr_t addr = strtol(&command[1][2], &endptr, 16);
 
     if (errno == ERANGE || addr <= 0 || *endptr != '\0')
     {
@@ -796,7 +795,7 @@ static int toggle_breakpoint(char **command, struct sylvan_inferior *inf, int is
         return 0;
     }
 
-    intptr_t addr = strtol(command[2], &endptr, 10);
+    uintptr_t addr = strtol(&command[2][2], &endptr, 16);
 
     if (errno == ERANGE || addr <= 0 || *endptr != '\0')
     {
@@ -917,7 +916,7 @@ int handle_delete_breakpoint(char **command, struct sylvan_inferior **inf)
         return 0;
     }
 
-    intptr_t addr = strtol(command[2], &endptr, 10);
+    uintptr_t addr = strtol(&command[2][2], &endptr, 16);
 
     if (errno == ERANGE || addr <= 0 || *endptr != '\0')
     {
@@ -980,5 +979,206 @@ int handle_info_alias(char **command, struct sylvan_inferior **inf)
     {
         printf("%-20s %-8s\n", cmd_alias->name, cmd_alias->org_cmd);
     }
+    return 0;
+}
+
+static void print_memory_table(uint64_t *data, int num_rows, uintptr_t addr)
+{
+    struct table_col cols[] = {
+        {"Address", 18, TABLE_COL_HEX_LONG},
+        {"Value", 40, TABLE_COL_STR}};
+
+    struct table_row *rows = NULL, *current = NULL;
+    for (int i = 0; i < num_rows; i++)
+    {
+
+        char *value_str = malloc(24); // 8 * 2 + 7 spaces + 1 null
+        uint8_t bytes[8];
+        for (int j = 0; j < 8; j++)
+        {
+            bytes[j] = (data[i] >> (j * 8)) & 0xFF;
+        }
+        snprintf(value_str, 24,
+                 "%02x %02x %02x %02x %02x %02x %02x %02x",
+                 bytes[7], bytes[6], bytes[5], bytes[4],
+                 bytes[3], bytes[2], bytes[1], bytes[0]);
+
+        struct table_row *new_row = malloc(sizeof(struct table_row));
+        void *row_data = malloc(sizeof(uintptr_t) + sizeof(char *));
+        *(uintptr_t *)row_data = addr + (i * 8);
+        *(char **)(row_data + sizeof(uintptr_t)) = value_str;
+        new_row->data = row_data;
+        new_row->next = NULL;
+
+        if (!rows)
+        {
+            rows = new_row;
+        }
+        else
+        {
+            current->next = new_row;
+        }
+        current = new_row;
+    }
+
+    print_table("", cols, 2, rows, num_rows);
+
+    current = rows;
+    while (current)
+    {
+        struct table_row *next = current->next;
+        free((char *)(*(char **)((char *)current->data + sizeof(uintptr_t)))); // Free value_str
+        free((void *)current->data);
+        free(current);
+        current = next;
+    }
+}
+
+int handle_read_memory(char **command, struct sylvan_inferior **inf)
+{
+
+
+    int p_table = 0;
+
+    char *endptr;
+    errno = 0;
+    int num_rows = 1;
+
+    if (command[1] && (strncmp(command[1], "-t", 2) == 0))
+    {
+        p_table = 1;
+    }
+
+    char *addr_str = command[1], *row_str = command[2];
+
+    if (p_table)
+    {
+        addr_str = command[2];
+        row_str = command[3];
+    }
+
+    if(!addr_str)
+    {
+        fprintf(stderr, "Invalid: No address provided\n");
+        return 0;
+    }
+
+    if (row_str)
+    {
+        num_rows = strtol(row_str, &endptr, 10);
+        if (errno == ERANGE || num_rows <= 0 || *endptr != '\0')
+        {
+            fprintf(stderr, "Invalid lines number\n");
+            return 0;
+        }
+        if (num_rows > 16)
+        {
+            printf("Limiting the lines to 16\n");
+            num_rows = 16;
+        }
+    }
+
+    uintptr_t addr = strtol(&addr_str[2], &endptr, 16);
+
+    if (errno == ERANGE || addr <= 0 || *endptr != '\0')
+    {
+        fprintf(stderr, "%sInvalid address: %s%s\n", RED, addr_str, RESET);
+        return 0;
+    }
+
+    uint64_t *data = malloc(num_rows * sizeof(uint64_t));
+    for (int i = 0; i < num_rows; i++)
+    {
+        uintptr_t current_addr = addr + (i * 8);
+        if (sylvan_get_memory(*inf, current_addr, &data[i]))
+        {
+            fprintf(stderr, "%sError at 0x%016lx: %s%s\n", RED, current_addr, sylvan_get_last_error(), RESET);
+            free(data);
+            return 0;
+        }
+
+        if (!p_table)
+        {
+            printf("0x%016lx:     0x%016lx\n", current_addr, data[i]);
+        }
+    }
+
+    if (p_table)
+    {
+        print_memory_table(data, num_rows, addr);
+    }
+
+    free(data);
+
+    return 0;
+}
+
+int handle_write_memory(char **command, struct sylvan_inferior **inf)
+{
+    if (!command || !inf)
+    {
+        fprintf(stderr, "Invalid arguments\n");
+        return 0;
+    }
+
+    if (!command[1])
+    {
+        fprintf(stderr, "Enter Valid Address\n");
+        printf("Usage:\n\tmemory_write <addr(in hex eg: 0xabcd)> <bytes> ...\n");
+        printf("\t<value>: hex (e.g., 0x12, ff), decimal (e.g., 255), or string (e.g., \"hello\")\n");
+        return 0;
+    }
+
+    if (!command[2])
+    {
+        fprintf(stderr, "%sNo values provided%s\n", RED, RESET);
+        printf("Usage:\n\tmemory_write <addr> <value> ...\n");
+        printf("\t<value>: hex (e.g., 0x12, ff), decimal (e.g., 255), or string (e.g., \"hello\")\n");
+        return 0;
+    }
+    char *endptr;
+    errno = 0;
+    uintptr_t addr = strtol(&command[1][2], &endptr, 16);
+    if (errno == ERANGE || addr <= 0 || *endptr != '\0')
+    {
+        fprintf(stderr, "%sInvalid address: %s%s\n", RED, command[2], RESET);
+        return 0;
+    }
+
+    uint8_t bytes[256];
+    size_t size = 0;
+    for (int i = 2; command[i] != NULL && size < 256; i++)
+    {
+        const char *arg = command[i];
+        
+        if (arg[0] == '"' && arg[strlen(arg) - 1] == '"') {
+            size_t len = strlen(arg) - 2; // Exclude quotes
+            if (size + len > 256) {
+                fprintf(stderr, "%sToo many bytes (max 256)%s\n", RED, RESET);
+                return 0;
+            }
+            for (size_t j = 0; j < len; j++) {
+                bytes[size++] = (uint8_t)arg[j + 1];
+            }
+            continue;
+        }
+
+        errno = 0;
+        int base = (strncmp(arg, "0x", 2) == 0) ? 16 : 10;
+        unsigned long value = strtoul(arg, &endptr, base);
+        
+        if (errno == ERANGE || value > 0xFF || *endptr != '\0') {
+            fprintf(stderr, "%sInvalid value: %s%s\n", RED, arg, RESET);
+            return 0;
+        }
+
+        bytes[size++] = (uint8_t)value;
+    }
+
+    if (sylvan_set_memory(*inf, addr, bytes, size))
+    {
+        fprintf(stderr, "%s\n", sylvan_get_last_error());
+    }
+
     return 0;
 }

@@ -24,6 +24,7 @@ static char **get_command(const char *prompt)
 
     if (interrupted)
     {
+        interrupted = 0;
         free(input);
         return NULL;
     }
@@ -35,7 +36,8 @@ static char **get_command(const char *prompt)
     else
     {
         HIST_ENTRY *last = history_get(history_length);
-        if (last && last->line && last->line[0] != '\0') {
+        if (last && last->line && last->line[0] != '\0')
+        {
             free(input);
             input = strdup(last->line);
         }
@@ -111,7 +113,6 @@ static void free_command(char **args)
     free(args);
 }
 
-
 /**
  * @brief Prints the debugger's heading banner
  */
@@ -147,22 +148,19 @@ static void print_heading(void)
     printf("╝%s\n\n", RESET);
 }
 
-
 static void handle_sigint(int sig)
 {
     (void)sig;
     interrupted = 1;
 }
 
-
 static int event_hook(void)
 {
     if (interrupted)
     {
-        rl_done = 1; 
+        rl_done = 1;
         rl_replace_line("", 0);
         rl_redisplay();
-        interrupted = 0;
         return 1;
     }
     return 0;
@@ -186,7 +184,6 @@ void interface_loop(struct sylvan_inferior **inf)
         perror("Failed to set SIGINT handler");
         return;
     }
-
 
     print_heading();
     init_commands();

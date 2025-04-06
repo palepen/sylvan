@@ -88,8 +88,7 @@ static int prompt_for_continue(int current_row, int total_rows)
     return 1;
 }
 
-void print_table(const char *title, struct table_col *cols, int col_count,
-                 struct table_row *rows, int row_count)
+void print_table(const char *title, struct table_col *cols, int col_count, struct table_row *rows, int row_count)
 {
     if (!title || !cols || col_count <= 0)
         return;

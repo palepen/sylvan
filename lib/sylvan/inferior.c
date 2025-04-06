@@ -12,6 +12,7 @@
 #include <sys/user.h>
 #include <sys/wait.h>
 #include <wordexp.h>
+#include <sys/personality.h>
 
 #include <sylvan/inferior.h>
 #include "breakpoint.h"
@@ -652,5 +653,72 @@ sylvan_code_t sylvan_set_args(struct sylvan_inferior *inf, const char *args) {
     free(inf->args);
     inf->args = newargs;
     
+    return SYLVANC_OK;
+}
+
+/**
+ * reads a memory location
+ */
+sylvan_code_t sylvan_get_memory(struct sylvan_inferior *inf, uintptr_t addr, uint64_t *data){
+    if (inf == NULL)
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+    
+    errno = 0;
+    uint64_t _data;
+    _data = ptrace(PTRACE_PEEKDATA, inf->pid, (void *)(addr), NULL);
+    if (errno)
+        return sylvan_set_errno_msg(SYLVANC_PTRACE_PEEKDATA_FAILED, "Cannot read address %lx", (addr));
+
+    *data = _data;
+
+    return SYLVANC_OK;
+}
+
+
+/**
+ * set a memory location to given bytes
+ */
+sylvan_code_t sylvan_set_memory(struct sylvan_inferior *inf, uintptr_t addr, const void *data, size_t size) {
+    
+    if (inf == NULL || data == NULL)
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+    
+    if (size == 0)
+        return sylvan_set_code(SYLVANC_OK); 
+    
+    if (addr == 0)
+        return sylvan_set_errno_msg(SYLVANC_INVALID_ARGUMENT, "Invalid address 0x%lx", addr);
+    
+
+    const uint8_t *bytes = (const uint8_t *)data;
+    size_t offset = 0;
+
+    while (offset + 8 <= size) {
+        uint64_t chunk = 0;
+        memcpy(&chunk, bytes + offset, 8);
+
+        if (ptrace(PTRACE_POKEDATA, inf->pid, (void *)(addr + offset), (void *)chunk) < 0) 
+            return sylvan_set_errno_msg(SYLVANC_PTRACE_POKEDATA_FAILED, "cannot write at 0x%lx: %s", addr + offset);
+        
+        offset += 8;
+    }
+    
+    if (offset < size) {
+        size_t remaining = size - offset;
+        uint64_t current_data = 0;
+        if (sylvan_get_memory(inf, (uintptr_t){addr + offset}, &current_data)) 
+            return sylvan_set_errno_msg(SYLVANC_PTRACE_POKEDATA_FAILED, "cannot write at 0x%lx: %s", addr + offset);        
+        
+        uint64_t new_data = 0;
+        memcpy(&new_data, bytes + offset, remaining);
+
+        uint64_t mask = (1ULL << (remaining * 8)) - 1;
+        new_data = (current_data & ~mask) | (new_data & mask);
+
+        if (ptrace(PTRACE_POKEDATA, inf->pid, (void *)(addr + offset), (void *)new_data) < 0) 
+            return sylvan_set_errno_msg(SYLVANC_PTRACE_POKEDATA_FAILED, "cannot write at 0x%lx: %s", addr + offset);
+        
+    }
+
     return SYLVANC_OK;
 }
