@@ -53,6 +53,12 @@ typedef enum sylvan_code_t {
     SYVLANC_BREAKPOINT_NOT_FOUND           ,    /* breakpoint not found */
     SYVLANC_BREAKPOINT_LIMIT_REACHED       ,    /* too many breakpoints */
 
+    /* symbol errors*/
+    SYLVANC_SYMBOL_ERROR            = 0x600,
+    SYLVANC_ELF_FAILED                     ,    /* could not read the elf file */
+    SYLVANC_DWARF_NOT_FOUND                ,    /* not dwarf info */
+    SYLVANC_SYMBOL_NOT_FOUND               ,    /* symbol not found */
+
 } sylvan_code_t;
 
 struct sylvan_error_context {

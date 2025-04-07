@@ -18,6 +18,7 @@
 #include "breakpoint.h"
 #include "error.h"
 #include "utils.h"
+#include "symbol.h"
 
 static int sylvan_inferior_idx = 0;
 static int sylvan_inferior_count = 0;
@@ -170,16 +171,25 @@ static sylvan_code_t sylvan_terminate_or_detach(struct sylvan_inferior *inf) {
  * creates an inferior
  */
 sylvan_code_t sylvan_inferior_create(struct sylvan_inferior **infp) {
-    if (infp == NULL)
+    if (!infp)
         return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
 
-    *infp = malloc(sizeof(struct sylvan_inferior));
-    if (*infp == NULL)
+    struct sylvan_inferior *inf = malloc(sizeof(struct sylvan_inferior));
+    if (!inf)
         return sylvan_set_code(SYLVANC_OUT_OF_MEMORY);
 
-    memset(*infp, 0, sizeof(struct sylvan_inferior));
-    (*infp)->id = sylvan_inferior_idx++;
+    memset(inf, 0, sizeof(struct sylvan_inferior));
+
+    sylvan_code_t code;
+    if ((code = sylvan_sym_init(inf))) {
+        free(inf);
+        return code;
+    }
+
+    inf->id = sylvan_inferior_idx++;
     sylvan_inferior_count++;
+
+    *infp = inf;
 
     return SYLVANC_OK;
 }
@@ -193,6 +203,9 @@ sylvan_code_t sylvan_inferior_destroy(struct sylvan_inferior *inf) {
 
     sylvan_code_t code;
     if ((code = sylvan_terminate_or_detach(inf)))
+        return code;
+
+    if ((code = sylvan_sym_destroy(inf)))
         return code;
 
     free(inf->realpath);
@@ -264,6 +277,9 @@ sylvan_code_t sylvan_attach(struct sylvan_inferior *inf, pid_t pid) {
     inf->pid = pid;
     inf->is_attached = true;
     inf->realpath = path;
+
+    if ((code = sylvan_sym_load_tables(inf)))
+        return code;
 
     if ((code = sylvan_breakpoint_reset_phybp(inf)))
         return code;
@@ -607,7 +623,7 @@ sylvan_code_t sylvan_set_regs(struct sylvan_inferior *inf, const struct user_reg
 sylvan_code_t sylvan_set_filepath(struct sylvan_inferior *inf, const char *filepath) {
     if (inf == NULL)
         return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
-    
+
     if (filepath == NULL) {
         free(inf->realpath);
         inf->realpath = NULL;
@@ -629,6 +645,9 @@ sylvan_code_t sylvan_set_filepath(struct sylvan_inferior *inf, const char *filep
 
     free(inf->realpath);
     inf->realpath = newpath;
+
+    if ((code = sylvan_sym_load_tables(inf)))
+        return code;
 
     return SYLVANC_OK;
 }
@@ -719,6 +738,21 @@ sylvan_code_t sylvan_set_memory(struct sylvan_inferior *inf, uintptr_t addr, con
             return sylvan_set_errno_msg(SYLVANC_PTRACE_POKEDATA_FAILED, "cannot write at 0x%lx: %s", addr + offset);
         
     }
+
+    return SYLVANC_OK;
+}
+
+sylvan_code_t sylvan_set_breakpoint_function(struct sylvan_inferior *inf, const char *function) {
+    if (!inf || !function)
+        return sylvan_set_code(SYLVANC_INVALID_ARGUMENT);
+
+    uintptr_t addr;
+    sylvan_code_t code;
+    if ((code = sylvan_get_function_addr(inf, function, &addr)))
+        return code;
+
+    if ((code = sylvan_breakpoint_set(inf, addr)))
+        return code;
 
     return SYLVANC_OK;
 }

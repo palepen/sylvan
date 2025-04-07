@@ -2,6 +2,7 @@
 #define SYLVAN_INCLUDE_SYLVAN_INFERIOR_H
 
 #include <sylvan/breakpoint.h>
+#include <sylvan/symbol.h>
 #include <sylvan/error.h>
 #include <stdbool.h>
 #include <sys/types.h>
@@ -16,6 +17,7 @@ typedef enum {
 } sylvan_inferior_state_t;
 
 
+
 struct sylvan_inferior {
     int id;
     pid_t pid;
@@ -26,6 +28,9 @@ struct sylvan_inferior {
 
     struct sylvan_breakpoint breakpoints[MAX_BREAKPOINTS];
     int breakpoint_count;
+
+    struct sylvan_sym_table elf_table;
+    struct sylvan_sym_table dwarf_table;
 };
 
 sylvan_code_t sylvan_inferior_create(struct sylvan_inferior **inf);
@@ -46,5 +51,7 @@ sylvan_code_t sylvan_set_args(struct sylvan_inferior *inf, const char *args);
 
 sylvan_code_t sylvan_get_memory(struct sylvan_inferior *inf, uintptr_t addr, uint64_t *data);
 sylvan_code_t sylvan_set_memory(struct sylvan_inferior *inf, uintptr_t addr, const void *data, size_t size);
+
+sylvan_code_t sylvan_set_breakpoint_function(struct sylvan_inferior *inf, const char *function);
 
 #endif /* SYLVAN_INCLUDE_SYLVAN_INFERIOR_H */

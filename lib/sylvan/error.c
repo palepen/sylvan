@@ -61,6 +61,11 @@ const char *sylvan_strerror(sylvan_code_t code) {
         case SYVLANC_BREAKPOINT_NOT_FOUND:      return "Breakpoint not found";
         case SYVLANC_BREAKPOINT_LIMIT_REACHED:  return "Too many breakpoints";
 
+        case SYLVANC_SYMBOL_ERROR:              return "Error parsing symbols";
+        case SYLVANC_ELF_FAILED:                return "Could not read the elf file";
+        case SYLVANC_DWARF_NOT_FOUND:           return "Debug symbols not found";
+        case SYLVANC_SYMBOL_NOT_FOUND:          return "Symbol not found";
+
     }
     return "Unknown error";
 }

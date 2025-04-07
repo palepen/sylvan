@@ -6,10 +6,10 @@ BUILD       := build
 ARGS        ?=
 C_SRC       := $(shell find $(SRC) $(LIB) -type f -name "*.c")
 INCLUDE     := include
-C_INCLUDE   := $(patsubst %, -I%, $(INCLUDE))
+C_INCLUDE   := $(patsubst %, -I%, $(INCLUDE)) $(shell pkg-config --cflags libdwarf)
 
 CC_FLAGS    := -Wall -Wextra -Wmissing-field-initializers -MMD -MP $(C_INCLUDE)
-LD_FLAGS    := -lreadline -lZydis -lelf
+LD_FLAGS    := -lreadline -lZydis -lelf -ldwarf
 
 OBJS := $(patsubst %.c, $(BUILD)/%.o, $(C_SRC))
 DEPS := $(OBJS:.o=.d)
