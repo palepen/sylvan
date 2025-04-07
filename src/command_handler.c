@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "sylvan/inferior.h"
+#include "sylvan/symbol.h"
 #include "command_handler.h"
 #include "command_registry.h"
 #include "auxiliary_vectors.h"
@@ -238,22 +239,6 @@ int handle_info(char **command, struct sylvan_inferior **inf)
     return 0;
 }
 
-/**
- * @brief Handler for 'info address' command
- * @param command Array of command strings
- * @param inf Pointer to the current inferior structure
- */
-int handle_info_address(char **command, struct sylvan_inferior **inf)
-{
-    if (inf && command)
-    {
-        (void)command;
-        (void)inf;
-    }
-
-    printf("%sSymbol Table Required%s\n", YELLOW, RESET);
-    return 0;
-}
 
 /**
  * @brief Handler for 'info all-registers' command
@@ -299,22 +284,6 @@ int handle_info_args(char **command, struct sylvan_inferior **inf)
     }
 
     printf("Arguments: %s%s%s\n", GREEN, (*inf)->args, RESET);
-    return 0;
-}
-
-/**
- * @brief Handler for 'info auto-load' command
- * @param command Array of command strings
- * @param inf Pointer to the current inferior structure
- */
-int handle_info_auto_load(char **command, struct sylvan_inferior **inf)
-{
-    if (inf && command)
-    {
-        (void)command;
-        (void)inf;
-    }
-    printf("%sno auto-load support%s\n", YELLOW, RESET);
     return 0;
 }
 
@@ -372,28 +341,6 @@ int handle_info_auxv(char **command, struct sylvan_inferior **inf)
     return 0;
 }
 
-/**
- * @brief Handler for 'info bookmark' command
- * @param command Array of command strings
- * @param inf Pointer to the current inferior structure
- */
-int handle_info_bookmark(char **command, struct sylvan_inferior **inf)
-{
-    if (!inf)
-    {
-        fprintf(stderr, "%sError: Null Inferior Pointer%s\n", RED, RESET);
-        return -1;
-    }
-
-    if (inf && command)
-    {
-        (void)command;
-        (void)inf;
-    }
-
-    printf("%sNot Implemented%s\n", YELLOW, RESET);
-    return 0;
-}
 
 /**
  * @brief Handler for 'info breakpoints' command
@@ -452,21 +399,6 @@ int handle_info_breakpoints(char **command, struct sylvan_inferior **inf)
         free(current);
         current = next;
     }
-    return 0;
-}
-
-/**
- * @brief Handler for 'info copying' command
- * @param command Array of command strings
- * @param inf Pointer to the current inferior structure
- */
-int handle_info_copying(char **command, struct sylvan_inferior **inf)
-{
-    (void)command;
-    (void)inf;
-
-    printf("%sSylvan Copying Conditions:%s\n", CYAN, RESET);
-    printf("%sThis is a placeholder for Sylvan's redistribution terms.%s\n", YELLOW, RESET);
     return 0;
 }
 
@@ -814,20 +746,23 @@ int handle_breakpoint_set(char **command, struct sylvan_inferior **inf)
 
     if (command[1][0] != '0')
     {
-        size_t func_sz = 0;
-        if (get_function_bounds((*inf)->realpath, command[1], &addr, &func_sz))
+        if(sylvan_set_breakpoint_function(*inf, command[1]))
         {
+            fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+            return 0;    
+        }
+        printf("%sbreakpoint set at: %s%s\n", GREEN, command[1], RESET);
+
+    }
+    else
+    {
+        if (sylvan_breakpoint_set(*inf, addr))
+        {
+            fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
             return 0;
         }
+        printf("%sbreakpoint set at: 0x%016lx%s\n", GREEN, addr, RESET);
     }
-
-    if (sylvan_breakpoint_set(*inf, addr))
-    {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
-        return 0;
-    }
-
-    printf("%sbreakpoint set at: %ld%s\n", GREEN, addr, RESET);
     return 0;
 }
 

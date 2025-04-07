@@ -1,9 +1,9 @@
 #ifndef DEFINE_ALIAS
-#error "This file is intended for textual inclusion with the DEFINE_COMMAND macro defined"
+#error "This file is intended for textual inclusion with the DEFINE_ALIAS macro defined"
 #endif
 
 DEFINE_ALIAS("h",         "help",               1),  
-DEFINE_ALIAS("e",         "exit",               2),  
+DEFINE_ALIAS("q",         "quit",               2),  
 DEFINE_ALIAS("c",         "continue",           3),  
 DEFINE_ALIAS("b",         "breakpoint",         4),  
 DEFINE_ALIAS("i",         "info",               5),  
