@@ -9,6 +9,6 @@ sylvan_code_t sylvan_sym_destroy(struct sylvan_inferior *inf);
 
 sylvan_code_t sylvan_sym_load_tables(struct sylvan_inferior *inf);
 
-sylvan_code_t sylvan_get_function_addr(struct sylvan_inferior *inf, const char *name, uintptr_t *addr);
+sylvan_code_t sylvan_get_label_addr(struct sylvan_inferior *inf, const char *name, uintptr_t *addr);
 
 #endif /* SYLVAN_SYMBOL_H */

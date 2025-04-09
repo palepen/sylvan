@@ -203,32 +203,41 @@ sylvan_sym_load_elf(const char *path, struct sylvan_sym_table *sym_table) {
             continue;
 
         Elf_Data *data = elf_getdata(scn, NULL);
+        if (!data)
+            continue;
+
         int count = shdr.sh_size / shdr.sh_entsize;
         for (int i = 0; i < count; ++i) {
             GElf_Sym sym;
             if (!gelf_getsym(data, i, &sym))
                 continue;
 
-            if (GELF_ST_TYPE(sym.st_info) == STT_FUNC && sym.st_value != 0) {
-                const char *name = elf_strptr(elf, shdr.sh_link, sym.st_name);
-                if (name && *name)
-                    sylvan_sym_add(sym_table, name, (uintptr_t)sym.st_value);
-            }
+            GElf_Shdr target_shdr;
+            Elf_Scn *target_scn = elf_getscn(elf, sym.st_shndx);
+            if (!target_scn || !gelf_getshdr(target_scn, &target_shdr))
+                continue;
+
+            if (!(target_shdr.sh_flags & SHF_EXECINSTR))
+                continue;
+
+            const char *name = elf_strptr(elf, shdr.sh_link, sym.st_name);
+            if (name && *name)
+                sylvan_sym_add(sym_table, name, (uintptr_t)sym.st_value);
         }
     }
 
     elf_end(elf);
     close(fd);
-
     return SYLVANC_OK;
 
-    fail:
-        close(fd);
-        return sylvan_set_code(SYLVANC_ELF_FAILED);
+fail:
+    close(fd);
+    return sylvan_set_code(SYLVANC_ELF_FAILED);
 }
 
+
 SYLVAN_INTERNAL sylvan_code_t
-sylvan_get_function_addr(struct sylvan_inferior *inf, const char *name, uintptr_t *addr) {
+sylvan_get_label_addr(struct sylvan_inferior *inf, const char *name, uintptr_t *addr) {
     assert(name && addr);
     struct symbol *sym;
     if ((sym = sym_lookup(&inf->dwarf_table, name)))
@@ -251,8 +260,12 @@ sylvan_sym_load_tables(struct sylvan_inferior *inf) {
     sylvan_code_t code;
     if ((code = sylvan_sym_load_dwarf(inf->realpath, &inf->dwarf_table)) && code != SYLVANC_DWARF_NOT_FOUND)
         return code;
-    if ((code = sylvan_sym_load_elf(inf->realpath, &inf->dwarf_table)))
+
+    if ((code = sylvan_sym_load_elf(inf->realpath, &inf->elf_table)))
         return code;
+
+    qsort(inf->dwarf_table.symbols, inf->dwarf_table.count, sizeof(struct symbol), symcmp);
+    qsort(inf->elf_table.symbols, inf->elf_table.count, sizeof(struct symbol), symcmp);
 
     return SYLVANC_OK;
 }
