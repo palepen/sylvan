@@ -1,4 +1,5 @@
 build/*
+debug/*
 /sylvan
 
 .vscode/*
@@ -10,3 +11,5 @@ build/*
 /*.s
 /*.S
 /*.log
+
+src/debug.c

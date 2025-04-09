@@ -52,6 +52,7 @@ typedef enum sylvan_code_t {
     SYVLANC_BREAKPOINT_ALREADY_EXISTS      ,    /* breakpoint already exits at memory address */
     SYVLANC_BREAKPOINT_NOT_FOUND           ,    /* breakpoint not found */
     SYVLANC_BREAKPOINT_LIMIT_REACHED       ,    /* too many breakpoints */
+    SYVLANC_BREAKPOINT_HIT                 ,    /* program hit a breakpoint */
 
     /* symbol errors*/
     SYLVANC_SYMBOL_ERROR            = 0x600,

@@ -22,7 +22,7 @@ An x86-64 debugger
     
 or
 
-```./sylvan```
+```./build/sylvan```
 
 #### Clean
 

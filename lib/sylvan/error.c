@@ -60,6 +60,7 @@ const char *sylvan_strerror(sylvan_code_t code) {
         case SYVLANC_BREAKPOINT_ALREADY_EXISTS: return "Breapoint already exists";
         case SYVLANC_BREAKPOINT_NOT_FOUND:      return "Breakpoint not found";
         case SYVLANC_BREAKPOINT_LIMIT_REACHED:  return "Too many breakpoints";
+        case SYVLANC_BREAKPOINT_HIT:            return "Program hit a breakpoint";
 
         case SYLVANC_SYMBOL_ERROR:              return "Error parsing symbols";
         case SYLVANC_ELF_FAILED:                return "Could not read the elf file";
