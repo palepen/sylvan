@@ -13,5 +13,6 @@ struct disassembled_instruction
 
 int disassemble(struct sylvan_inferior *inf, uintptr_t start_addr, uintptr_t end_addr, struct disassembled_instruction **instructions, int *count);
 void print_disassembly(struct disassembled_instruction *instructions, int count);
+int get_function_bounds(const char *binary_path, const char *func_name, uintptr_t *start_addr, size_t *size);
 
 #endif

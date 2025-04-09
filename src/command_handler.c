@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <elf.h>
-#include <libelf.h>
-#include <gelf.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
@@ -18,84 +16,6 @@
 #include "disassemble.h"
 
 
-/**
- * Temp fuction to get the func addr
- */
-static int get_function_bounds(const char *binary_path, const char *func_name, uintptr_t *start_addr, size_t *size)
-{
-    if (elf_version(EV_CURRENT) == EV_NONE)
-    {
-        fprintf(stderr, "%sELF library initialization failed: %s%s\n", RED, elf_errmsg(-1), RESET);
-        return 1;
-    }
-
-    int fd = open(binary_path, O_RDONLY);
-    if (fd < 0)
-    {
-        fprintf(stderr, "%sCannot open %s: %s%s\n", RED, binary_path, strerror(errno), RESET);
-        return 1;
-    }
-
-    Elf *elf = elf_begin(fd, ELF_C_READ, NULL);
-    if (!elf)
-    {
-        fprintf(stderr, "%self_begin failed: %s%s\n", RED, elf_errmsg(-1), RESET);
-        close(fd);
-        return 1;
-    }
-
-    size_t shstrndx;
-    if (elf_getshdrstrndx(elf, &shstrndx) != 0)
-    {
-        fprintf(stderr, "%self_getshdrstrndx failed: %s%s\n", RED, elf_errmsg(-1), RESET);
-        elf_end(elf);
-        close(fd);
-        return 1;
-    }
-
-    Elf_Scn *scn = NULL;
-    while ((scn = elf_nextscn(elf, scn)) != NULL)
-    {
-        GElf_Shdr shdr;
-        if (!gelf_getshdr(scn, &shdr))
-        {
-            continue;
-        }
-
-        if (shdr.sh_type == SHT_SYMTAB)
-        {
-            Elf_Data *data = elf_getdata(scn, NULL);
-            size_t count = shdr.sh_size / shdr.sh_entsize;
-
-            for (size_t i = 0; i < count; ++i)
-            {
-                GElf_Sym sym;
-                if (!gelf_getsym(data, i, &sym))
-                {
-                    continue;
-                }
-
-                if (GELF_ST_TYPE(sym.st_info) == STT_FUNC)
-                {
-                    const char *name = elf_strptr(elf, shdr.sh_link, sym.st_name);
-                    if (name && strcmp(name, func_name) == 0)
-                    {
-                        *start_addr = sym.st_value;
-                        *size = sym.st_size;
-                        elf_end(elf);
-                        close(fd);
-                        return 0; 
-                    }
-                }
-            }
-        }
-    }
-
-    fprintf(stderr, "%sFunction '%s' not found in %s%s\n", RED, func_name, binary_path, RESET);
-    elf_end(elf);
-    close(fd);
-    return 1;
-}
 
 /**
  * @brief Prints available commands or info subcommands with detailed usage
@@ -163,7 +83,7 @@ static void print_commands(enum sylvan_command_type tp, int print_all)
  */
 int handle_help(char **command, struct sylvan_inferior **inf)
 {
-    if (inf)
+    if (!inf)
     {
         (void)inf;
     }
@@ -510,7 +430,7 @@ int handle_add_inferior(char **command, struct sylvan_inferior **inf)
         return 0;
     }
 
-    if (inf)
+    if (!inf)
     {
         fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
         return 0;
@@ -568,7 +488,7 @@ int handle_step_inst(char **command, struct sylvan_inferior **inf)
         return 0;
     }
 
-    if (inf)
+    if (!inf)
     {
         fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
         return 0;
@@ -672,7 +592,7 @@ int handle_set(char **command, struct sylvan_inferior **inf)
  */
 int handle_set_args(char **command, struct sylvan_inferior **inf)
 {
-    if (inf)
+    if (!inf)
     {
         fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
         return 0;
@@ -722,7 +642,7 @@ int handle_set_args(char **command, struct sylvan_inferior **inf)
  */
 int handle_set_reg(char **command, struct sylvan_inferior **inf)
 {
-    if (inf)
+    if (!inf)
     {
         fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
         return 0;
@@ -923,7 +843,7 @@ static int toggle_breakpoint(char **command, struct sylvan_inferior *inf, int is
  */
 int handle_disable_breakpoint(char **command, struct sylvan_inferior **inf)
 {
-    if (inf)
+    if (!inf)
     {
         fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
         return 0;
@@ -937,7 +857,7 @@ int handle_disable_breakpoint(char **command, struct sylvan_inferior **inf)
  */
 int handle_enable_breakpoint(char **command, struct sylvan_inferior **inf)
 {
-    if (inf)
+    if (!inf)
     {
         fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
         return 0;
@@ -951,7 +871,7 @@ int handle_enable_breakpoint(char **command, struct sylvan_inferior **inf)
  */
 int handle_delete_breakpoint(char **command, struct sylvan_inferior **inf)
 {
-    if (inf)
+    if (!inf)
     {
         fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
         return 0;
@@ -1113,7 +1033,7 @@ static void print_memory_table(uint64_t *data, int num_rows, uintptr_t addr)
         current = new_row;
     }
 
-    print_table("", cols, 2, rows, num_rows); // Assuming this handles its own formatting
+    print_table("", cols, 2, rows, num_rows);
 
     current = rows;
     while (current)
@@ -1283,14 +1203,15 @@ int handle_disassemble(char **command, struct sylvan_inferior **inf)
         fprintf(stderr, "%sNull Pointer Inferior%s\n", RED, RESET);
         return 0;
     }
-
+    
     if (!command[1])
     {
         fprintf(stderr, "%sEnter Valid start Address%s\n", RED, RESET);
-        printf("%sUsage:%s\n\t%sdissassemble <add1> <addr2>%s\n", YELLOW, RESET, GREEN, RESET);
+        printf("%sUsage:%s\n\t%sdissassemble <addr> <endaddr>\n\tdisassemble <function>\n\tdisassemble -c\n%s", YELLOW, RESET, GREEN, RESET);
         return 0;
     }
 
+ 
     char *endptr;
     uintptr_t start_addr, end_addr;
 
@@ -1356,5 +1277,5 @@ int handle_disassemble(char **command, struct sylvan_inferior **inf)
         current = next;
     }
 
-    return result;
+    return 0;
 }
