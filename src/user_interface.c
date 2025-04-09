@@ -11,7 +11,7 @@
 #include "command_registry.h"
 
 sig_atomic_t interrupted;
-
+struct sylvan_inferior *glob_inf;
 static char **get_command(const char *prompt)
 {
     if (prompt == NULL)
@@ -178,6 +178,7 @@ static int event_hook(void)
  */
 void interface_loop(struct sylvan_inferior **inf)
 {
+    glob_inf = *inf;
 
     if (signal(SIGINT, handle_sigint) == SIG_ERR)
     {

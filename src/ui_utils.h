@@ -67,5 +67,8 @@ extern void clear_screen(void);
  * @brief Generic table printing function
  */
 void print_table(const char *title, struct table_col *cols, int col_count, struct table_row *rows, int row_count);
+void sylvan_print_error(const char *fmt, ...);
+void sylvan_print_ok(const char *fmt, ...);
+void sylvan_print_instruction(const char *fmt, ...);
 
 #endif

@@ -4,9 +4,40 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "ui_utils.h"
 
+void sylvan_print_error(const char *fmt, ...)
+{
+    printf(RED);
+    va_list args;
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
+    printf(RESET "\n");
+}
+
+void sylvan_print_ok(const char *fmt, ...)
+{
+    printf(GREEN);
+    va_list args;
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
+    printf(RESET "\n");
+}
+
+void sylvan_print_instruction(const char *fmt, ...)
+{
+    printf(YELLOW "Usage:\n" RESET);
+    printf(GREEN);
+    va_list args;
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
+    printf(RESET "\n");
+}
 /**
  * @brief Gets the current terminal dimension
  * @return Number of columns in terminal, or DEFAULT_TERM_WIDTH if undetectable
@@ -62,7 +93,7 @@ void clear_screen(void)
 
 static void print_table_line(int *widths, int col_count, char left, char mid, char right)
 {
-    printf("%s%c", BORDER_COLOR, left);
+    printf(BORDER_COLOR "%c", left);
     for (int i = 0; i < col_count; i++)
     {
         for (int j = 0; j < widths[i]; j++)
@@ -70,19 +101,19 @@ static void print_table_line(int *widths, int col_count, char left, char mid, ch
         if (i < col_count - 1)
             printf("%c", mid);
     }
-    printf("%c%s\n", right, RESET);
+    printf("%c\n" RESET, right);
 }
 
 static int prompt_for_continue(int current_row, int total_rows)
 {
-    printf("%s-- More -- (%d/%d rows) [Press Enter to continue, q to quit] %s", YELLOW, current_row, total_rows, RESET);
+    printf(YELLOW "-- More -- (%d/%d rows) [Press Enter to continue, q to quit] " RESET, current_row, total_rows);
     fflush(stdout);
     int c = getchar();
     if (c == 'q' || c == 'Q')
         return 0;
     while (c != '\n' && c != EOF)
         c = getchar();
-    
+
     printf("\033[1A\033[2K");
     fflush(stdout);
     return 1;
@@ -109,21 +140,19 @@ void print_table(const char *title, struct table_col *cols, int col_count, struc
     total_width += 1; // Left border
     if (total_width > term_width)
     {
-        // Scale down proportionally if too wide (simplified; could be more sophisticated)
+
         float scale = (float)term_width / total_width;
         for (int i = 0; i < col_count; i++)
             widths[i] = (int)(widths[i] * scale);
         total_width = term_width;
     }
 
-    // Print title
-    printf("\n %s%s%s%s \n", BOLD, CYAN, title, RESET);
+    printf(BOLD CYAN "\n %s \n" RESET, title);
 
     // Top border
     print_table_line(widths, col_count, '+', '+', '+');
 
-    // Headers
-    printf("%s│", BORDER_COLOR);
+    printf(BORDER_COLOR "│");
     for (int i = 0; i < col_count; i++)
     {
         printf(" %s%s%-*s%s", BOLD, YELLOW, widths[i] - 1, cols[i].header, RESET);

@@ -15,8 +15,6 @@
 #include "ui_utils.h"
 #include "disassemble.h"
 
-
-
 /**
  * @brief Prints available commands or info subcommands with detailed usage
  * @param tp Type of commands to print (standard, info, or set)
@@ -115,29 +113,18 @@ int handle_exit(char **command, struct sylvan_inferior **inf)
 /**
  * @brief Handler for 'continue' command
  * @param command Array of command strings
- * @param inf Pointer to the current inferior structure
+ * @param inf Pointer to the current inferior structures
  */
 int handle_continue(char **command, struct sylvan_inferior **inf)
 {
     (void)command;
-    if (!inf)
-    {
-        fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
-        return 0;
-    }
-
     struct sylvan_inferior *curr_inf = *inf;
-    if (!curr_inf)
-    {
-        fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
-        return 0;
-    }
 
     if (sylvan_continue(curr_inf))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
-        return 0;
+        sylvan_print_error(sylvan_get_last_error());
     }
+
     return 0;
 }
 
@@ -149,29 +136,11 @@ int handle_continue(char **command, struct sylvan_inferior **inf)
 int handle_info(char **command, struct sylvan_inferior **inf)
 {
     if (command[1])
-    {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
-        return 0;
-    }
+        sylvan_print_error("Invalid Arguments");
+    else
+        print_commands(SYLVAN_INFO_COMMAND, 0);
+
     (void)inf;
-    print_commands(SYLVAN_INFO_COMMAND, 0);
-    return 0;
-}
-
-/**
- * @brief Handler for 'info address' command
- * @param command Array of command strings
- * @param inf Pointer to the current inferior structure
- */
-int handle_info_address(char **command, struct sylvan_inferior **inf)
-{
-    if (inf && command)
-    {
-        (void)command;
-        (void)inf;
-    }
-
-    printf("%sSymbol Table Required%s\n", YELLOW, RESET);
     return 0;
 }
 
@@ -184,7 +153,7 @@ int handle_info_registers(char **command, struct sylvan_inferior **inf)
 {
     if (command[1])
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
 
@@ -192,7 +161,8 @@ int handle_info_registers(char **command, struct sylvan_inferior **inf)
 
     if (sylvan_get_regs(*inf, regs))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+
+        sylvan_print_error(sylvan_get_last_error());
         free(regs);
         return 0;
     }
@@ -210,31 +180,17 @@ int handle_info_args(char **command, struct sylvan_inferior **inf)
 {
     if (command[1])
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
+
     if (!inf || !(*inf))
     {
-        fprintf(stderr, "%sNull inferior%s\n", RED, RESET);
+        sylvan_print_error("Null Inferior Pointer");
+        return 0;
     }
 
     printf("Arguments: %s%s%s\n", GREEN, (*inf)->args, RESET);
-    return 0;
-}
-
-/**
- * @brief Handler for 'info auto-load' command
- * @param command Array of command strings
- * @param inf Pointer to the current inferior structure
- */
-int handle_info_auto_load(char **command, struct sylvan_inferior **inf)
-{
-    if (inf && command)
-    {
-        (void)command;
-        (void)inf;
-    }
-    printf("%sno auto-load support%s\n", YELLOW, RESET);
     return 0;
 }
 
@@ -247,20 +203,20 @@ int handle_info_auxv(char **command, struct sylvan_inferior **inf)
 {
     if (command[1])
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
 
     if (!inf || !(*inf))
     {
-        fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
+        sylvan_print_error("Null Inferior Pointer");
         return 0;
     }
 
     struct sylvan_inferior *curr_inf = *inf;
     if (curr_inf->pid == 0)
     {
-        printf("%sInvalid PID%s\n", RED, RESET);
+        sylvan_print_error("Invalid PID");
         return 0;
     }
 
@@ -269,7 +225,7 @@ int handle_info_auxv(char **command, struct sylvan_inferior **inf)
 
     if (!raw_auxv)
     {
-        return -1;
+        return 0;
     }
 
     struct auxv_entry *entries = parse_auxv(raw_auxv, len, 1);
@@ -277,8 +233,8 @@ int handle_info_auxv(char **command, struct sylvan_inferior **inf)
 
     if (!entries)
     {
-        fprintf(stderr, "%sError: Failed to parse auxv%s\n", RED, RESET);
-        return -1;
+        sylvan_print_error("Failed to parse auxv");
+        return 0;
     }
 
     printf("%sAuxiliary Vector for PID %d:%s\n", CYAN, curr_inf->pid, RESET);
@@ -286,32 +242,9 @@ int handle_info_auxv(char **command, struct sylvan_inferior **inf)
     printf("%s----  --------------------  --------            -----------%s\n", BLUE, RESET);
     for (size_t i = 0; entries[i].type != AT_NULL; i++)
     {
-        print_auxv_entry(&entries[i]); // Assuming this handles its own formatting
+        print_auxv_entry(&entries[i]);
     }
     free(entries);
-    return 0;
-}
-
-/**
- * @brief Handler for 'info bookmark' command
- * @param command Array of command strings
- * @param inf Pointer to the current inferior structure
- */
-int handle_info_bookmark(char **command, struct sylvan_inferior **inf)
-{
-    if (!inf)
-    {
-        fprintf(stderr, "%sError: Null Inferior Pointer%s\n", RED, RESET);
-        return -1;
-    }
-
-    if (inf && command)
-    {
-        (void)command;
-        (void)inf;
-    }
-
-    printf("%sNot Implemented%s\n", YELLOW, RESET);
     return 0;
 }
 
@@ -324,15 +257,16 @@ int handle_info_breakpoints(char **command, struct sylvan_inferior **inf)
 {
     if (command[1])
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
 
-    if (!inf)
-    {
-        fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
-    }
     struct sylvan_inferior *curr_inf = *inf;
+    if (!curr_inf)
+    {
+        sylvan_print_error("Null inferior pointer");
+        return 0;
+    }
 
     struct table_col cols[] = {
         {"NUM", 5, TABLE_COL_INT},
@@ -341,20 +275,20 @@ int handle_info_breakpoints(char **command, struct sylvan_inferior **inf)
         {"STATUS", 10, TABLE_COL_INT}};
 
     int col_count = 4;
-
+    
     struct table_row *rows = NULL, *current = NULL;
     for (int i = 0; i < curr_inf->breakpoint_count; i++)
     {
         struct table_row *new_row = malloc(sizeof(struct table_row));
-        void *row_data = malloc(sizeof(int) + sizeof(char *) + sizeof(unsigned long) + sizeof(int));
-        int *int_data = (int *)row_data;
-        int_data[0] = i;
+        void *row_data = malloc(sizeof(int) + sizeof(char *) + sizeof(uint64_t) + sizeof(int));
+        *(int *)(row_data) = i;
         *(const char **)(row_data + sizeof(int)) = "software";
-        *(unsigned long *)(row_data + sizeof(int) + sizeof(char *)) = curr_inf->breakpoints[i].addr;
-        int_data[3] = curr_inf->breakpoints[i].is_enabled_phy;
+        *(uint64_t *)(row_data + sizeof(int) + sizeof(char *)) = curr_inf->breakpoints[i].addr;
+        *(int *)(row_data + sizeof(int) + sizeof(char *) + sizeof(uint64_t)) = curr_inf->breakpoints[i].is_enabled_log;
         new_row->data = row_data;
         new_row->next = NULL;
-
+        
+        printf("%ld\n", *(unsigned long *)(row_data + sizeof(int)));
         if (!rows)
             rows = new_row;
         else
@@ -362,8 +296,7 @@ int handle_info_breakpoints(char **command, struct sylvan_inferior **inf)
         current = new_row;
     }
 
-    print_table("BREAKPOINTS", cols, col_count, rows, curr_inf->breakpoint_count); // Assuming this handles its own formatting
-
+    print_table("BREAKPOINTS", cols, col_count, rows, curr_inf->breakpoint_count);
     current = rows;
     while (current)
     {
@@ -376,21 +309,6 @@ int handle_info_breakpoints(char **command, struct sylvan_inferior **inf)
 }
 
 /**
- * @brief Handler for 'info copying' command
- * @param command Array of command strings
- * @param inf Pointer to the current inferior structure
- */
-int handle_info_copying(char **command, struct sylvan_inferior **inf)
-{
-    (void)command;
-    (void)inf;
-
-    printf("%sSylvan Copying Conditions:%s\n", CYAN, RESET);
-    printf("%sThis is a placeholder for Sylvan's redistribution terms.%s\n", YELLOW, RESET);
-    return 0;
-}
-
-/**
  * @brief Handler for 'info inferiors' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
@@ -399,7 +317,7 @@ int handle_info_inferiors(char **command, struct sylvan_inferior **inf)
 {
     if (command[1])
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
 
@@ -426,29 +344,29 @@ int handle_add_inferior(char **command, struct sylvan_inferior **inf)
 {
     if (command[1])
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
 
     if (!inf)
     {
-        fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
+        sylvan_print_error("Null Inferior Pointer");
         return 0;
     }
 
     if (sylvan_inferior_destroy(*inf))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+        sylvan_print_error(sylvan_get_last_error());
         return 0;
     }
 
     if (sylvan_inferior_create(inf))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+        sylvan_print_error(sylvan_get_last_error());
         return 0;
     }
 
-    printf("%sCreated New Inferior:%s \n\t%sID:%s %d\n", GREEN, RESET, BLUE, RESET, (*inf)->id);
+    sylvan_print_ok("Created New Inferior: ID: %d", (*inf)->id);
     return 0;
 }
 
@@ -459,19 +377,19 @@ int handle_run(char **command, struct sylvan_inferior **inf)
 {
     if (command[1])
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
 
     if (!inf)
     {
-        fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
+        sylvan_print_error("Null Inferior Pointer");
         return 0;
     }
 
     if (sylvan_run(*inf))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+        sylvan_print_error(sylvan_get_last_error());
     }
 
     return 0;
@@ -484,22 +402,22 @@ int handle_step_inst(char **command, struct sylvan_inferior **inf)
 {
     if (command[1])
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
 
     if (!inf)
     {
-        fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
+        sylvan_print_error("Null Inferior Pointer");
         return 0;
     }
     if (sylvan_stepinst(*inf))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+        sylvan_print_error(sylvan_get_last_error());
         return 0;
     }
 
-    printf("%sSingle Instruction executed%s\n", GREEN, RESET);
+    sylvan_print_ok("Single Instruction executed");
     return 0;
 }
 
@@ -507,25 +425,40 @@ int handle_file(char **command, struct sylvan_inferior **inf)
 {
     if (command[1] == NULL)
     {
-        fprintf(stderr, "%sNo filename provided%s\n", RED, RESET);
+        sylvan_print_error("No filename provided");
         return 0;
     }
 
     if (command[2])
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
+    }
+
+    if((*inf)->pid != 0)
+    {
+        if(sylvan_inferior_destroy(*inf))
+        {
+            sylvan_print_error(sylvan_get_last_error());
+            return 0;
+        }
+
+        if(sylvan_inferior_create(inf))
+        {
+            sylvan_print_error(sylvan_get_last_error());
+            return 0;
+        }
     }
 
     const char *filepath = command[1];
 
     if (sylvan_set_filepath(*inf, filepath))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+        sylvan_print_error(sylvan_get_last_error());
         return 0;
     }
 
-    printf("%sFile %s assigned to inferior id: %d%s\n", GREEN, filepath, (*inf)->id, RESET);
+    sylvan_print_ok("File %s assigned to inferior id: %d", filepath, (*inf)->id);
     return 0;
 }
 
@@ -536,15 +469,14 @@ int handle_attach(char **command, struct sylvan_inferior **inf)
 {
     if (command[1] == NULL)
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
-        printf("%sUsage:%s\n", YELLOW, RESET);
-        printf("   %sattach <pid>%s\n", GREEN, RESET);
+        sylvan_print_error("Invalid Arguments");
+        sylvan_print_instruction("\tattach <pid>");
         return 0;
     }
 
     if (command[2])
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
 
@@ -554,17 +486,33 @@ int handle_attach(char **command, struct sylvan_inferior **inf)
 
     if (errno == ERANGE || pid <= 0 || *endptr != '\0')
     {
-        fprintf(stderr, "%sInvalid PID: %s%s\n", RED, command[1], RESET);
-        printf("%sUsage:%s\n    %sattach <pid>%s\n", YELLOW, RESET, GREEN, RESET);
+        sylvan_print_error("Invalid PID: %s", command[1]);
+        sylvan_print_instruction("\tattach <pid>");
         return 0;
+    }
+
+
+    if((*inf)->pid != 0)
+    {
+        if(sylvan_inferior_destroy(*inf))
+        {
+            sylvan_print_error(sylvan_get_last_error());
+            return 0;
+        }
+
+        if(sylvan_inferior_create(inf))
+        {
+            sylvan_print_error(sylvan_get_last_error());
+            return 0;
+        }
     }
 
     if (sylvan_attach(*inf, pid))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+        sylvan_print_error(sylvan_get_last_error());
         return 0;
     }
-    printf("%sProcess PID: %ld to inferior id: %d%s\n", GREEN, pid, (*inf)->id, RESET);
+    sylvan_print_ok("Process PID: %ld to inferior id: %d", pid, (*inf)->id);
     return 0;
 }
 
@@ -572,13 +520,12 @@ int handle_attach(char **command, struct sylvan_inferior **inf)
  * @brief Handler for 'set' command
  * @param command Array of command strings
  * @param inf Pointer to the current inferior structure
- * @return 0 to success and 2 to move to sub_command
  */
 int handle_set(char **command, struct sylvan_inferior **inf)
 {
     if (command[1])
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
 
@@ -594,7 +541,7 @@ int handle_set_args(char **command, struct sylvan_inferior **inf)
 {
     if (!inf)
     {
-        fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
+        sylvan_print_error("Null Inferior Pointer");
         return 0;
     }
 
@@ -610,7 +557,7 @@ int handle_set_args(char **command, struct sylvan_inferior **inf)
     char *args = (char *)malloc(sizeof(char) * total_len);
     if (!args)
     {
-        fprintf(stderr, "%sMemory allocation failed%s\n", RED, RESET);
+        sylvan_print_error("Memory allocation failed");
         return 0;
     }
 
@@ -627,11 +574,11 @@ int handle_set_args(char **command, struct sylvan_inferior **inf)
 
     if (sylvan_set_args(*inf, args))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+        sylvan_print_error(sylvan_get_last_error());
         free(args);
         return 0;
     }
-    printf("%sAdded arguments to inferior: %d%s\n", GREEN, (*inf)->id, RESET);
+    sylvan_print_ok("Added arguments to inferior: %d\n", (*inf)->id);
 
     free(args);
     return 0;
@@ -644,27 +591,27 @@ int handle_set_reg(char **command, struct sylvan_inferior **inf)
 {
     if (!inf)
     {
-        fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
+        sylvan_print_error("Null Inferior Pointer");
         return 0;
     }
 
     if (command[2] == NULL || command[3] == NULL)
     {
-        fprintf(stderr, "%sNo name or value given%s\n", RED, RESET);
-        printf("%sUsage:%s\n    %sset reg <register name> <value>%s\n", YELLOW, RESET, GREEN, RESET);
+        sylvan_print_error("No name or value given");
+        sylvan_print_instruction("\tset reg <register name> <value>");
         return 0;
     }
 
     if (command[4])
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
 
     int idx = find_register_by_name(command[2]);
     if (idx == -1)
     {
-        fprintf(stderr, "%sregister not found%s\n", RED, RESET);
+        sylvan_print_error("register not found");
         return 0;
     }
     char *endptr;
@@ -673,8 +620,8 @@ int handle_set_reg(char **command, struct sylvan_inferior **inf)
 
     if (errno == ERANGE || val <= 0 || *endptr != '\0')
     {
-        fprintf(stderr, "%sInvalid value: %s%s\n", RED, command[3], RESET);
-        printf("%sUsage:%s\n    %sset reg <value>%s\n", YELLOW, RESET, GREEN, RESET);
+        sylvan_print_error("Invalid value: %s", command[3]);
+        sylvan_print_instruction("\tset reg <value>");
         return 0;
     }
 
@@ -682,7 +629,7 @@ int handle_set_reg(char **command, struct sylvan_inferior **inf)
 
     if (sylvan_get_regs(*inf, regs))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+        sylvan_print_error(sylvan_get_last_error());
         free(regs);
         return 0;
     }
@@ -691,12 +638,12 @@ int handle_set_reg(char **command, struct sylvan_inferior **inf)
 
     if (sylvan_set_regs(*inf, regs))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+        sylvan_print_error(sylvan_get_last_error());
         free(regs);
         return 0;
     }
 
-    printf("%sSet %s to %ld%s\n", GREEN, sylvan_registers_info[idx].name, val, RESET);
+    sylvan_print_ok("%s to %ld\n", sylvan_registers_info[idx].name, val);
     free(regs);
     return 0;
 }
@@ -708,26 +655,26 @@ int handle_breakpoint_set(char **command, struct sylvan_inferior **inf)
 {
     if (!inf)
     {
-        fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
+        sylvan_print_error("Null Inferior Pointer");
         return 0;
     }
     if (command[1] == NULL)
     {
-        fprintf(stderr, "%saddress missing%s\n", RED, RESET);
-        printf("%sUsage:%s\n    %sbreakpoint <address>%s\n", YELLOW, RESET, GREEN, RESET);
+        sylvan_print_error("address missing");
+        sylvan_print_instruction("\tbreakpoint <address>");
         return 0;
     }
 
     if (command[2])
     {
-        fprintf(stderr, "%sInvalid Arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
 
     char *endptr;
     errno = 0;
     uintptr_t addr = strtol(&command[1][2], &endptr, 16);
-    if (errno == ERANGE || addr <= 0 || *endptr != '\0')
+    if (errno == ERANGE || *endptr != '\0')
     {
         addr = 0;
     }
@@ -741,13 +688,13 @@ int handle_breakpoint_set(char **command, struct sylvan_inferior **inf)
         }
     }
 
-    if (sylvan_breakpoint_set(*inf, addr))
+    if ((addr != 0 ) && sylvan_breakpoint_set(*inf, addr))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+        sylvan_print_error(sylvan_get_last_error());
         return 0;
     }
 
-    printf("%sbreakpoint set at: %ld%s\n", GREEN, addr, RESET);
+    sylvan_print_ok("breakpoint set at: 0x%016lx", addr);
     return 0;
 }
 
@@ -758,8 +705,8 @@ static int toggle_breakpoint(char **command, struct sylvan_inferior *inf, int is
 {
     if (command[1] == NULL)
     {
-        fprintf(stderr, "%sInvalid arguments%s\n", RED, RESET);
-        printf("%sUsage:%s\n\t%sdisable <id>%s\n\t%sdisable -a <address>%s\n", YELLOW, RESET, GREEN, RESET, GREEN, RESET);
+        sylvan_print_error("Invalid Arguments");
+        sylvan_print_instruction("\tdisable <id>\n\tdisable -a <address>");
         return 0;
     }
 
@@ -769,16 +716,16 @@ static int toggle_breakpoint(char **command, struct sylvan_inferior *inf, int is
     {
         int id = strtol(command[1], &endptr, 10);
 
-        if (errno == ERANGE || id <= 0 || *endptr != '\0')
+        if (errno == ERANGE || id < 0 || *endptr != '\0')
         {
             id = 0;
-            fprintf(stderr, "%sInvalid id%s\n", RED, RESET);
+            sylvan_print_error("Invalid id");
             return 0;
         }
 
         if (id > inf->breakpoint_count)
         {
-            fprintf(stderr, "%sInvalid id use: info breakpoint%s\n", RED, RESET);
+            sylvan_print_error("Invalid id use: info breakpoint");
             return 0;
         }
 
@@ -786,7 +733,7 @@ static int toggle_breakpoint(char **command, struct sylvan_inferior *inf, int is
         {
             if (sylvan_breakpoint_disable(inf, inf->breakpoints[id].addr))
             {
-                fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+                sylvan_print_error(sylvan_get_last_error());
                 return 0;
             }
         }
@@ -794,18 +741,19 @@ static int toggle_breakpoint(char **command, struct sylvan_inferior *inf, int is
         {
             if (sylvan_breakpoint_enable(inf, inf->breakpoints[id].addr))
             {
-                fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+                sylvan_print_error(sylvan_get_last_error());
                 return 0;
             }
         }
-        printf("%sbreakpoint at addr 0x%lx  %s%s\n", GREEN, inf->breakpoints[id].addr, (isDisable ? "disabled" : "enabled"), RESET);
+        sylvan_print_ok("breakpoint at addr 0x%lx  %s", inf->breakpoints[id].addr, (isDisable ? "disabled" : "enabled"));
         return 0;
     }
 
     if (command[2] == NULL)
     {
-        fprintf(stderr, "%sInvalid arguments%s\n", RED, RESET);
-        printf("%sUsage:%s\n\t%sdisable <id>%s\n\t%sdisable -a <address>%s\n", YELLOW, RESET, GREEN, RESET, GREEN, RESET);
+        sylvan_print_error("Invalid Arguments");
+        
+        sylvan_print_instruction("\tdisable <id>\n\tdisable -a <address>");
         return 0;
     }
 
@@ -814,7 +762,7 @@ static int toggle_breakpoint(char **command, struct sylvan_inferior *inf, int is
     if (errno == ERANGE || addr <= 0 || *endptr != '\0')
     {
         addr = 0;
-        fprintf(stderr, "%sInvalid address%s\n", RED, RESET);
+        sylvan_print_error("Invalid address");
         return 0;
     }
 
@@ -822,7 +770,7 @@ static int toggle_breakpoint(char **command, struct sylvan_inferior *inf, int is
     {
         if (sylvan_breakpoint_disable(inf, addr))
         {
-            fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+            sylvan_print_error(sylvan_get_last_error());
             return 0;
         }
     }
@@ -830,11 +778,11 @@ static int toggle_breakpoint(char **command, struct sylvan_inferior *inf, int is
     {
         if (sylvan_breakpoint_enable(inf, addr))
         {
-            fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+            sylvan_print_error(sylvan_get_last_error());
             return 0;
         }
     }
-    printf("%sbreakpoint at addr 0x%lx  %s%s\n", GREEN, addr, (isDisable ? "disabled" : "enabled"), RESET);
+    sylvan_print_ok("breakpoint at addr 0x%lx  %s", addr, (isDisable ? "disabled" : "enabled"));
     return 0;
 }
 
@@ -845,11 +793,12 @@ int handle_disable_breakpoint(char **command, struct sylvan_inferior **inf)
 {
     if (!inf)
     {
-        fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
+        sylvan_print_error("Null Inferior Pointer");
         return 0;
     }
 
-    return toggle_breakpoint(command, *inf, 1);
+    toggle_breakpoint(command, *inf, 1);
+    return 0;
 }
 
 /**
@@ -859,11 +808,12 @@ int handle_enable_breakpoint(char **command, struct sylvan_inferior **inf)
 {
     if (!inf)
     {
-        fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
+        sylvan_print_error("Null Inferior Pointer");
         return 0;
     }
 
-    return toggle_breakpoint(command, *inf, 0);
+    toggle_breakpoint(command, *inf, 0);
+    return 0;
 }
 
 /**
@@ -873,78 +823,67 @@ int handle_delete_breakpoint(char **command, struct sylvan_inferior **inf)
 {
     if (!inf)
     {
-        fprintf(stderr, "%sNull Inferior Pointer%s\n", RED, RESET);
+        sylvan_print_error("Null Inferior Pointer");
         return 0;
     }
 
     if (command[1] == NULL)
     {
-        fprintf(stderr, "%sInvalid arguments%s\n", RED, RESET);
-        printf("%sUsage:%s\n\t%sdisable <id>%s\n\t%sdisable -a <address>%s\n", YELLOW, RESET, GREEN, RESET, GREEN, RESET);
+        sylvan_print_error("Invalid Arguments");
+        sylvan_print_instruction("\tdelete <id>\n\tdelete -a <address>");
         return 0;
     }
 
     char *endptr;
     errno = 0;
+    printf("asfas\n");
     if (strcmp(command[1], "-a") != 0)
     {
         int id = strtol(command[1], &endptr, 10);
-
-        if (errno == ERANGE || id <= 0 || *endptr != '\0')
+        if (errno == ERANGE || id < 0 || *endptr != '\0')
         {
-            id = 0;
-            fprintf(stderr, "%sInvalid id%s\n", RED, RESET);
+            sylvan_print_error("Invalid id");
             return 0;
         }
 
         if (id > (*inf)->breakpoint_count)
         {
-            fprintf(stderr, "%sInvalid id use: (*info) breakpoint%s\n", RED, RESET);
+            sylvan_print_error("Invalid id use: info_breakpoint");
             return 0;
         }
 
         if (sylvan_breakpoint_unset((*inf), (*inf)->breakpoints[id].addr))
         {
-            fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+            sylvan_print_error(sylvan_get_last_error());
             return 0;
         }
-
-        else
-        {
-            if (sylvan_breakpoint_enable((*inf), (*inf)->breakpoints[id].addr))
-            {
-                fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
-                return 0;
-            }
-        }
-
-        printf("%sbreakpoint at addr 0x%lx  is deleted%s\n", GREEN, (*inf)->breakpoints[id].addr, RESET);
+        
+        sylvan_print_ok("breakpoint at addr 0x%lx  is deleted", (*inf)->breakpoints[id].addr);
         return 0;
     }
 
     if (command[2] == NULL)
     {
-        fprintf(stderr, "%sInvalid arguments%s\n", RED, RESET);
-        printf("%sUsage:%s\n\t%sdisable <id>%s\n\t%sdisable -a <address>%s\n", YELLOW, RESET, GREEN, RESET, GREEN, RESET);
+        sylvan_print_error("Invalid Arguments");
+        sylvan_print_instruction("\tdelete <id>\n\tdelete -a <address>");
         return 0;
     }
 
     uintptr_t addr = strtol(&command[2][2], &endptr, 16);
 
-    if (errno == ERANGE || addr <= 0 || *endptr != '\0')
+    if (errno == ERANGE || addr == 0 || *endptr != '\0')
     {
-        addr = 0;
-        fprintf(stderr, "%sInvalid address%s\n", RED, RESET);
+        sylvan_print_error("Invalid Address");
         return 0;
     }
 
     if (sylvan_breakpoint_unset((*inf), addr))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+        sylvan_print_error(sylvan_get_last_error());
         return 0;
     }
 
-    printf("%sbreakpoint at addr 0x%lx  is deleted%s\n", GREEN, addr, RESET);
+    sylvan_print_ok("breakpoint at addr 0x%lx  is deleted", addr);
     return 0;
 }
 
@@ -952,26 +891,25 @@ int handle_delete_breakpoint(char **command, struct sylvan_inferior **inf)
  * @brief Handles the 'set alias' command to create a new alias for an existing command
  * @param[in] command The command array (command[1] is the original command, command[2] is the alias name)
  * @param[in] inf The sylvan_inferior being debugged (unused in this function)
- * @return 1 on success, 0 on failure
  */
 int handle_set_alias(char **command, struct sylvan_inferior **inf)
 {
     (void)inf;
     if (command[1] == NULL || command[2] == NULL)
     {
-        fprintf(stderr, "%sInvalid arguments: Usage: set alias <command> <alias>%s\n", RED, RESET);
-        return 1;
+        sylvan_print_error("Invalid arguments");
+        return 0;
     }
 
     int alias_id = HASH_COUNT(alias_table) + 1;
 
     if (insert_alias(command[2], command[3], alias_id, 'u'))
     {
-        fprintf(stderr, "%sFailed to add alias%s\n", RED, RESET);
-        return 1;
+        sylvan_print_error("Failed to add alias");
+        return 0;
     }
 
-    printf("%sAlias added successfully: '%s' -> '%s'%s\n", GREEN, command[2], command[3], RESET);
+    sylvan_print_ok("Alias added successfully: '%s' -> '%s'", command[2], command[3]);
     return 0;
 }
 
@@ -980,7 +918,7 @@ int handle_info_alias(char **command, struct sylvan_inferior **inf)
     (void)inf;
     if (command[1])
     {
-        fprintf(stderr, "%sInvalid arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
     struct sylvan_command_alias *cmd_alias, *tmp;
@@ -1069,7 +1007,7 @@ int handle_read_memory(char **command, struct sylvan_inferior **inf)
 
     if (!addr_str)
     {
-        fprintf(stderr, "%sInvalid: No address provided%s\n", RED, RESET);
+        sylvan_print_error("Invalid: No address provided");
         return 0;
     }
 
@@ -1078,7 +1016,7 @@ int handle_read_memory(char **command, struct sylvan_inferior **inf)
         num_rows = strtol(row_str, &endptr, 10);
         if (errno == ERANGE || num_rows <= 0 || *endptr != '\0')
         {
-            fprintf(stderr, "%sInvalid lines number%s\n", RED, RESET);
+            sylvan_print_error("Invalid lines number");
             return 0;
         }
         if (num_rows > 16)
@@ -1088,11 +1026,18 @@ int handle_read_memory(char **command, struct sylvan_inferior **inf)
         }
     }
 
+    if(strncmp(addr_str, "0x", 2) == 0)
+    {
+        sylvan_print_error("Invalid Address");
+        sylvan_print_instruction("Ex: memory_read 0x1234");
+        return 0;
+    }
+
     uintptr_t addr = strtol(&addr_str[2], &endptr, 16);
 
     if (errno == ERANGE || addr <= 0 || *endptr != '\0')
     {
-        fprintf(stderr, "%sInvalid address: %s%s\n", RED, addr_str, RESET);
+        sylvan_print_error("Invalid address: %s", addr_str);
         return 0;
     }
 
@@ -1102,7 +1047,7 @@ int handle_read_memory(char **command, struct sylvan_inferior **inf)
         uintptr_t current_addr = addr + (i * 8);
         if (sylvan_get_memory(*inf, current_addr, &data[i]))
         {
-            fprintf(stderr, "%sError at 0x%016lx: %s%s\n", RED, current_addr, sylvan_get_last_error(), RESET);
+            sylvan_print_error("Error at 0x%016lx: %s", current_addr, sylvan_get_last_error());
             free(data);
             return 0;
         }
@@ -1126,31 +1071,24 @@ int handle_write_memory(char **command, struct sylvan_inferior **inf)
 {
     if (!command || !inf)
     {
-        fprintf(stderr, "%sInvalid arguments%s\n", RED, RESET);
+        sylvan_print_error("Invalid Arguments");
         return 0;
     }
-
-    if (!command[1])
+    
+    if (!command[1] || !command[2] || (strncmp(command[1], "0x", 2) == 0))
     {
-        fprintf(stderr, "%sEnter Valid Address%s\n", RED, RESET);
-        printf("%sUsage:%s\n\t%smemory_write <addr(in hex eg: 0xabcd)> <bytes> ...%s\n", YELLOW, RESET, GREEN, RESET);
+        sylvan_print_error("Enter Valid Address");
+        sylvan_print_instruction("\tmemory_write <addr(in hex eg: 0xabcd)> <bytes> ...");
         printf("\t%s<value>: hex (e.g., 0x12, ff), decimal (e.g., 255), or string (e.g., \"hello\")%s\n", YELLOW, RESET);
         return 0;
     }
 
-    if (!command[2])
-    {
-        fprintf(stderr, "%sNo values provided%s\n", RED, RESET);
-        printf("%sUsage:%s\n\t%smemory_write <addr> <value> ...%s\n", YELLOW, RESET, GREEN, RESET);
-        printf("\t%s<value>: hex (e.g., 0x12, ff), decimal (e.g., 255), or string (e.g., \"hello\")%s\n", YELLOW, RESET);
-        return 0;
-    }
     char *endptr;
     errno = 0;
     uintptr_t addr = strtol(&command[1][2], &endptr, 16);
     if (errno == ERANGE || addr <= 0 || *endptr != '\0')
     {
-        fprintf(stderr, "%sInvalid address: %s%s\n", RED, command[2], RESET);
+        sylvan_print_error("Invalid address: %s", command[2], RESET);
         return 0;
     }
 
@@ -1165,7 +1103,7 @@ int handle_write_memory(char **command, struct sylvan_inferior **inf)
             size_t len = strlen(arg) - 2; // Exclude quotes
             if (size + len > 256)
             {
-                fprintf(stderr, "%sToo many bytes (max 256)%s\n", RED, RESET);
+                sylvan_print_error("Too many bytes (max 256)");
                 return 0;
             }
             for (size_t j = 0; j < len; j++)
@@ -1181,7 +1119,7 @@ int handle_write_memory(char **command, struct sylvan_inferior **inf)
 
         if (errno == ERANGE || value > 0xFF || *endptr != '\0')
         {
-            fprintf(stderr, "%sInvalid value: %s%s\n", RED, arg, RESET);
+            sylvan_print_error("Invalid value: %s", arg);
             return 0;
         }
 
@@ -1190,7 +1128,7 @@ int handle_write_memory(char **command, struct sylvan_inferior **inf)
 
     if (sylvan_set_memory(*inf, addr, bytes, size))
     {
-        fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+        sylvan_print_error(sylvan_get_last_error());
     }
 
     return 0;
@@ -1200,32 +1138,33 @@ int handle_disassemble(char **command, struct sylvan_inferior **inf)
 {
     if (!command || !inf || !(*inf))
     {
-        fprintf(stderr, "%sNull Pointer Inferior%s\n", RED, RESET);
+        sylvan_print_error("Null Inferior Pointer");
         return 0;
     }
-    
+
     if (!command[1])
     {
-        fprintf(stderr, "%sEnter Valid start Address%s\n", RED, RESET);
-        printf("%sUsage:%s\n\t%sdissassemble <addr> <endaddr>\n\tdisassemble <function>\n\tdisassemble -c\n%s", YELLOW, RESET, GREEN, RESET);
+        sylvan_print_error("Enter Valid start Address");
+        sylvan_print_instruction("\tdissassemble <addr> <endaddr>\n\tdisassemble <function>\n\tdisassemble -c");
         return 0;
     }
 
- 
     char *endptr;
-    uintptr_t start_addr, end_addr;
 
-    if (strncmp(command[1], "-c", 2) == 0)
+    uintptr_t start_addr, end_addr;
+    int is_func = 1;
+    if (strncmp(command[1], "-c", 3) == 0)
     {
         struct user_regs_struct *regs = (struct user_regs_struct *)malloc(sizeof(struct user_regs_struct));
         if (sylvan_get_regs(*inf, regs))
         {
-            fprintf(stderr, "%s%s%s\n", RED, sylvan_get_last_error(), RESET);
+            sylvan_print_error(sylvan_get_last_error());
             return 0;
         }
 
         start_addr = regs->rip;
         end_addr = start_addr + 15;
+        is_func = 0;
     }
 
     if (command[2])
@@ -1234,7 +1173,7 @@ int handle_disassemble(char **command, struct sylvan_inferior **inf)
         start_addr = strtol(command[1], &endptr, 16);
         if (errno == ERANGE || start_addr <= 0 || *endptr != '\0')
         {
-            fprintf(stderr, "%sInvalid start address: %s%s\n", RED, command[1], RESET);
+            sylvan_print_error("Invalid start address: %s", command[1]);
             return 0;
         }
 
@@ -1242,12 +1181,12 @@ int handle_disassemble(char **command, struct sylvan_inferior **inf)
         end_addr = strtol(command[2], &endptr, 16);
         if (errno == ERANGE || end_addr <= start_addr || *endptr != '\0')
         {
-            fprintf(stderr, "%sInvalid end address: %s%s\n", RED, command[2], RESET);
+            sylvan_print_error("Invalid end address: %s", command[2]);
             return 0;
         }
     }
 
-    if (!command[2])
+    if (is_func)
     {
         size_t func_sz = 0;
         if (get_function_bounds((*inf)->realpath, command[1], &start_addr, &func_sz))
@@ -1264,7 +1203,7 @@ int handle_disassemble(char **command, struct sylvan_inferior **inf)
 
     if (result == 0)
     {
-        print_disassembly(instructions, count); // Assuming this handles its own formatting
+        print_disassembly(instructions, count);
     }
 
     struct disassembled_instruction *current = instructions;
