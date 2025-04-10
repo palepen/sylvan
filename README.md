@@ -28,26 +28,27 @@ or
 
 ```make clean```
 
-#### Example Images
+## Example Images
 
+### Normal Run
 ![Normal Run](<images/Normal Run.png>)
 
-## Help
+### Help
 ![help](<images/help.png>)
 
-## Breakpoints
+### Breakpoints
 ![Breakpoints](<images/breakpoints.png>)
 
-## Disassemble
+### Disassemble
 ![disassemble](<images/disassemble.png>)
 
-## Memory Write
+### Memory Write
 ![memory_write](<images/memory_write.png>)
 
-## Register Show
+### Register Show
 ![registers](<images/registers.png>)
 
-## Register Update
+### Register Update
 ![register change](<images/register_set.png>)
-![register change](<images/output change register set.png>)
+![register change](<images/output change regsiter set.png>)
 
