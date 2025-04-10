@@ -288,7 +288,6 @@ int handle_info_breakpoints(char **command, struct sylvan_inferior **inf)
         new_row->data = row_data;
         new_row->next = NULL;
         
-        printf("%ld\n", *(unsigned long *)(row_data + sizeof(int)));
         if (!rows)
             rows = new_row;
         else
@@ -595,10 +594,10 @@ int handle_set_reg(char **command, struct sylvan_inferior **inf)
         return 0;
     }
 
-    if (command[2] == NULL || command[3] == NULL)
+    if (command[2] == NULL || command[1] == NULL)
     {
         sylvan_print_error("No name or value given");
-        sylvan_print_instruction("\tset reg <register name> <value>");
+        sylvan_print_instruction("\tset_reg <register name> <value>");
         return 0;
     }
 
@@ -608,7 +607,7 @@ int handle_set_reg(char **command, struct sylvan_inferior **inf)
         return 0;
     }
 
-    int idx = find_register_by_name(command[2]);
+    int idx = find_register_by_name(command[1]);
     if (idx == -1)
     {
         sylvan_print_error("register not found");
@@ -616,12 +615,18 @@ int handle_set_reg(char **command, struct sylvan_inferior **inf)
     }
     char *endptr;
     errno = 0;
-    long val = strtol(command[3], &endptr, 10);
-
-    if (errno == ERANGE || val <= 0 || *endptr != '\0')
+    if(command[2][1] != 'x' && command[2][0] != '0')
     {
-        sylvan_print_error("Invalid value: %s", command[3]);
-        sylvan_print_instruction("\tset reg <value>");
+        sylvan_print_error("Invalid data");
+        sylvan_print_instruction("set_reg rax 0x40");
+        return 0;
+    }
+    uint64_t val = strtol(&command[2][2], &endptr, 16);
+
+    if (errno == ERANGE ||  *endptr != '\0')
+    {
+        sylvan_print_error("Invalid value: %s", command[2]);
+        sylvan_print_instruction("\tset_reg <reg> <value>");
         return 0;
     }
 
@@ -643,7 +648,7 @@ int handle_set_reg(char **command, struct sylvan_inferior **inf)
         return 0;
     }
 
-    sylvan_print_ok("%s to %ld\n", sylvan_registers_info[idx].name, val);
+    sylvan_print_ok("%s to %#lx\n", sylvan_registers_info[idx].name, val);
     free(regs);
     return 0;
 }
@@ -681,20 +686,24 @@ int handle_breakpoint_set(char **command, struct sylvan_inferior **inf)
 
     if (command[1][0] != '0')
     {
-        size_t func_sz = 0;
-        if (get_function_bounds((*inf)->realpath, command[1], &addr, &func_sz))
+        if (sylvan_set_breakpoint_function(*inf, command[1]))
         {
+            sylvan_print_error(sylvan_get_last_error());
             return 0;
         }
+        
+        sylvan_print_ok("breakpoint set at: %s", command[1]);
+        return 0;
     }
-
-    if ((addr != 0 ) && sylvan_breakpoint_set(*inf, addr))
+    
+    if (sylvan_breakpoint_set(*inf, addr))
     {
         sylvan_print_error(sylvan_get_last_error());
         return 0;
     }
+    sylvan_print_ok("breakpoint set at: %#lx", addr);
 
-    sylvan_print_ok("breakpoint set at: 0x%016lx", addr);
+    
     return 0;
 }
 
@@ -836,7 +845,6 @@ int handle_delete_breakpoint(char **command, struct sylvan_inferior **inf)
 
     char *endptr;
     errno = 0;
-    printf("asfas\n");
     if (strcmp(command[1], "-a") != 0)
     {
         int id = strtol(command[1], &endptr, 10);
@@ -1026,7 +1034,7 @@ int handle_read_memory(char **command, struct sylvan_inferior **inf)
         }
     }
 
-    if(strncmp(addr_str, "0x", 2) == 0)
+    if(strncmp(addr_str, "0x", 3) == 0)
     {
         sylvan_print_error("Invalid Address");
         sylvan_print_instruction("Ex: memory_read 0x1234");
@@ -1075,11 +1083,11 @@ int handle_write_memory(char **command, struct sylvan_inferior **inf)
         return 0;
     }
     
-    if (!command[1] || !command[2] || (strncmp(command[1], "0x", 2) == 0))
+    if (!command[1] || !command[2] || (strncmp(command[1], "0x", 3) == 0))
     {
         sylvan_print_error("Enter Valid Address");
         sylvan_print_instruction("\tmemory_write <addr(in hex eg: 0xabcd)> <bytes> ...");
-        printf("\t%s<value>: hex (e.g., 0x12, ff), decimal (e.g., 255), or string (e.g., \"hello\")%s\n", YELLOW, RESET);
+        printf("\t%s<value>: hex (e.g., 0x12, ff), decimal (e.g., 255), or string (e.g., \"hello\" without space in betwen)%s\n", YELLOW, RESET);
         return 0;
     }
 
@@ -1098,7 +1106,7 @@ int handle_write_memory(char **command, struct sylvan_inferior **inf)
     {
         const char *arg = command[i];
 
-        if (arg[0] == '"' && arg[strlen(arg) - 1] == '"')
+        if (arg[0] ==  34)
         {
             size_t len = strlen(arg) - 2; // Exclude quotes
             if (size + len > 256)
@@ -1106,17 +1114,25 @@ int handle_write_memory(char **command, struct sylvan_inferior **inf)
                 sylvan_print_error("Too many bytes (max 256)");
                 return 0;
             }
-            for (size_t j = 0; j < len; j++)
+            for (size_t j = 1; (uint8_t)arg[j] != 34; j++)
             {
-                bytes[size++] = (uint8_t)arg[j + 1];
+                if((uint8_t)arg[j] == NULL)
+                {
+                    sylvan_print_error("Enter valid values");
+                    printf("\t%s<value>: hex (e.g., 0x12, ff), decimal (e.g., 255), or string (e.g., \"hello\" without space in betwen)%s\n", YELLOW, RESET);
+                    return 0;
+                }
+
+                bytes[size++] = (uint8_t)arg[j];
             }
             continue;
         }
 
         errno = 0;
-        int base = (strncmp(arg, "0x", 2) == 0) ? 16 : 10;
+        int base = (arg[0] == '0' && arg[1] == 'x') ? 16 : 10;
+        if(base == 16)
+            arg = &arg[2];
         unsigned long value = strtoul(arg, &endptr, base);
-
         if (errno == ERANGE || value > 0xFF || *endptr != '\0')
         {
             sylvan_print_error("Invalid value: %s", arg);
@@ -1128,9 +1144,12 @@ int handle_write_memory(char **command, struct sylvan_inferior **inf)
 
     if (sylvan_set_memory(*inf, addr, bytes, size))
     {
+
         sylvan_print_error(sylvan_get_last_error());
+        return 0;
     }
 
+    sylvan_print_ok("Wrote at address %#lx", addr);
     return 0;
 }
 
@@ -1194,7 +1213,7 @@ int handle_disassemble(char **command, struct sylvan_inferior **inf)
             return 0;
         }
 
-        end_addr = start_addr + func_sz;
+        end_addr = start_addr;
     }
 
     struct disassembled_instruction *instructions = NULL;

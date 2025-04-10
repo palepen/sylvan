@@ -27,11 +27,10 @@ static void free_instructions(struct disassembled_instruction *head)
 }
 
 /**
- * Parses the binary and then gets the offset for the virt address provided 
+ * Parses the binary and then gets the offset for the virt address provided
  */
-static int get_file_offset_from_vaddr(FILE* fd, uintptr_t vaddr, size_t size, uintptr_t *file_offset, size_t *max_size)
+static int get_file_offset_from_vaddr(FILE *fd, uintptr_t vaddr, size_t size, uintptr_t *file_offset, size_t *max_size)
 {
-
 
     Elf64_Ehdr ehdr;
     fseek(fd, 0, SEEK_SET);
@@ -74,7 +73,6 @@ static int get_file_offset_from_vaddr(FILE* fd, uintptr_t vaddr, size_t size, ui
     fprintf(stderr, "%sVirtual address 0x%016lx not found in any loadable segment%s\n", RED, vaddr, RESET);
     return 1;
 }
-
 
 /**
  * parses the binary to get the function name and bounds
@@ -133,17 +131,14 @@ int get_function_bounds(const char *binary_path, const char *func_name, uintptr_
                     continue;
                 }
 
-                if (GELF_ST_TYPE(sym.st_info) == STT_FUNC)
+                const char *name = elf_strptr(elf, shdr.sh_link, sym.st_name);
+                if (name && strcmp(name, func_name) == 0)
                 {
-                    const char *name = elf_strptr(elf, shdr.sh_link, sym.st_name);
-                    if (name && strcmp(name, func_name) == 0)
-                    {
-                        *start_addr = sym.st_value;
-                        *size = sym.st_size;
-                        elf_end(elf);
-                        close(fd);
-                        return 0; 
-                    }
+                    *start_addr = sym.st_value;
+                    *size = sym.st_size;
+                    elf_end(elf);
+                    close(fd);
+                    return 0;
                 }
             }
         }
@@ -157,7 +152,7 @@ int get_function_bounds(const char *binary_path, const char *func_name, uintptr_
 
 int disassemble(struct sylvan_inferior *inf, uintptr_t start_addr, uintptr_t end_addr, struct disassembled_instruction **instructions, int *count)
 {
-    if (!inf || !inf->realpath || !instructions || !count || start_addr >= end_addr)
+    if (!inf || !inf->realpath || !instructions || !count || start_addr > end_addr)
     {
         fprintf(stderr, "%sInvalid arguments or address range%s\n", RED, RESET);
         return 1;
@@ -173,6 +168,7 @@ int disassemble(struct sylvan_inferior *inf, uintptr_t start_addr, uintptr_t end
     size_t size = end_addr - start_addr;
     uintptr_t file_offset;
     size_t max_size;
+    int is_not_func = size;
 
     if (get_file_offset_from_vaddr(fd, start_addr, size, &file_offset, &max_size) != 0)
     {
@@ -180,7 +176,7 @@ int disassemble(struct sylvan_inferior *inf, uintptr_t start_addr, uintptr_t end
         return 1;
     }
 
-    if (size > max_size)
+    if (size > max_size || size == 0)
     {
         size = max_size;
     }
@@ -216,8 +212,7 @@ int disassemble(struct sylvan_inferior *inf, uintptr_t start_addr, uintptr_t end
             ZyanUSize offset = 0;
             ZydisDisassembledInstruction instr;
 
-            while (offset < size &&
-                   ZYAN_SUCCESS(ZydisDisassembleIntel(
+            while (ZYAN_SUCCESS(ZydisDisassembleIntel(
                        ZYDIS_MACHINE_MODE_LONG_64,
                        runtime_address,
                        buffer + offset,
@@ -260,7 +255,7 @@ int disassemble(struct sylvan_inferior *inf, uintptr_t start_addr, uintptr_t end
                     fprintf(stderr, "%sMemory allocation failed (instruction)%s\n", RED, RESET);
                     break;
                 }
-
+                
                 if (!head)
                 {
                     head = node;
@@ -271,10 +266,19 @@ int disassemble(struct sylvan_inferior *inf, uintptr_t start_addr, uintptr_t end
                     tail->next = node;
                     tail = node;
                 }
-
                 offset += len;
                 runtime_address += len;
                 instr_count++;
+                
+                if(!(is_not_func) && strncmp(instr.text, "ret", 3) == 0)
+                {
+                    break;
+                }
+
+                if(offset > size)
+                {
+                    break;
+                }
             }
 
             if (offset >= size || instr_count > 0)
