@@ -10,6 +10,66 @@ An x86-64 debugger
 - GCC compiler (GNU extensions are used)
 - make
 
+### Dependencies Installation Guide
+
+This project uses [Zydis](https://github.com/zyantific/zydis) and [Zycore](https://github.com/zyantific/zycore-c) for disassembly and utility functionality. Below are the instructions to set up these dependencies on common Linux distributions.
+
+---
+
+#### Fedora
+
+You can install all required dependencies directly from the official Fedora repositories:
+
+```bash
+sudo dnf install \
+    zydis-devel \
+    zycore-c-devel \
+    elfutils-libelf-devel \
+    libdwarf-devel 
+```
+
+### Ubuntu
+
+#### Step 1: Install Required Tools and Libraries
+
+```bash
+sudo apt update
+sudo apt install -y \
+    build-essential \
+    cmake \
+    git \
+    libelf-dev \
+    libdwarf-dev
+```
+
+#### Step 2: Build and Install Zycore
+
+```
+git clone https://github.com/zyantific/zycore-c.git
+cd zycore-c
+mkdir build && cd build
+cmake ..
+make -j$(nproc)
+sudo make install
+```
+
+#### Step 3: Build and Install Zydis
+
+```
+git clone https://github.com/zyantific/zydis.git
+cd zydis
+mkdir build && cd build
+cmake ..
+make -j$(nproc)
+sudo make install
+```
+
+#### Step 4: Update the Linker Cache
+
+```
+sudo ldconfig
+```
+
 ### Setup and Execution
 
 #### Build
